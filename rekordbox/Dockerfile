@@ -16,7 +16,7 @@ COPY package*.json ./
 COPY apps/bridge/package.json ./apps/bridge/
 COPY apps/desktop/package.json ./apps/desktop/
 COPY packages/core/package.json ./packages/core/
-COPY packages/cli/package.json ./packages/cli/
+COPY apps/cli/package.json ./apps/cli/
 
 # Install dependencies
 RUN npm install
