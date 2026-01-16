@@ -4,9 +4,10 @@
 
 - `packages/core/`: downloader + audio pipeline + tagging (shared by CLI and apps).
 - `apps/cli/`: CLI entrypoint (`dropcrate`) for fast iteration and debugging.
-- `apps/desktop/`: React + Tailwind UI, plus Electron wrapper for packaged macOS/Windows builds.
-- `apps/bridge/`: local HTTP bridge (API + SSE events) that lets the UI run in a normal browser while still doing real downloads.
+- `apps/desktop/`: React + Tailwind UI. Serves as the web frontend.
+- `apps/bridge/`: Unified web server and local bridge (API + SSE events). Now serves the frontend statically in production mode.
 - `docs/`: product + Rekordbox + metadata docs (Mermaid diagrams live here).
+- `Dockerfile` & `render.yaml`: Deployment configuration for Render.com.
 - Output/runtime artifacts (not committed):
   - `DJ Library/`: local watch-folder test outputs (e.g. `DJ Library/00_INBOX/`)
   - `.dropcrate/`: cached downloader binaries and helpers
@@ -17,10 +18,11 @@ Keep pipeline/metadata logic in `packages/core/`. UI-only logic stays in `apps/d
 
 - `npm install --cache ./.npm-cache`: install dependencies (avoids user global npm cache issues).
 - `npm run typecheck`: TypeScript typecheck for all workspaces.
-- `npm run build`: build the core + CLI (used by bridge and desktop).
-- Browser-first dev (recommended): `npm run dev:web:full` then open `http://localhost:5173`.
-- Desktop dev (Electron): `npm run dev:desktop`.
+- `npm run build:web`: Build core and frontend for unified web deployment.
+- `npm run serve:web`: Start the unified web server (Bridge + Frontend) on port 10000 (default for Render) or 8787 (local).
+- Unified Web dev: `npm run dev:web:full` starts the bridge and vite dev server concurrently.
 - CLI dev: `npm run dev:dropcrate -- download "<url>" --inbox "./DJ Library/00_INBOX"`.
+- Desktop dev (Electron): `npm run dev:desktop` (Legacy/Local only).
 - Real-data smoke test: `npm run e2e:smoke` (and `npm run e2e:smoke:download` for a queue edge case).
 - Fingerprint key check: `npm run acoustid:keycheck`.
 
@@ -47,5 +49,6 @@ Use short, imperative commit subjects (e.g. `Fix bridge classify schema`). PRs s
 ## Security & Configuration Tips
 
 - The app is local-first; do not add telemetry or remote persistence.
-- Env vars: `OPENAI_API_KEY`, `DROPCRATE_OPENAI_MODEL`, `DROPCRATE_YTDLP_PATH`, `DROPCRATE_COOKIES_FROM_BROWSER`, `DROPCRATE_YTDLP_COOKIES`, `DROPCRATE_ACOUSTID_KEY`, `DROPCRATE_FPCALC_PATH`.
+- Deployment: Use the root `render.yaml` for one-click deployment to Render using Docker.
+- Env vars: `PORT` (defaults to 10000 on Render), `OPENAI_API_KEY`, `DROPCRATE_OPENAI_MODEL`, `DROPCRATE_INBOX_DIR` (set to `/data/inbox` on Render for persistence), `DROPCRATE_COOKIES_FROM_BROWSER`, `DROPCRATE_YTDLP_COOKIES`, `DROPCRATE_ACOUSTID_KEY`.
 - Do not commit `.env`, generated media, `.dropcrate/`, or `DJ Library/` outputs.
