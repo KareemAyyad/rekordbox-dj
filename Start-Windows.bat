@@ -25,9 +25,15 @@ if not exist node_modules (
 
 echo [2/2] Starting DropCrate...
 echo ------------------------------------------
-echo The app will open at: http://localhost:5173
+echo The app will open at: http://localhost:8787
 echo ------------------------------------------
 
-call npm start
+:: Ensure desktop is built if dist is missing
+if not exist "apps\desktop\dist" (
+    echo First time setup: Building frontend assets...
+    call npm run build:web
+)
+
+call npm run serve:web
 
 pause

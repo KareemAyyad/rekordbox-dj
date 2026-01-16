@@ -66,7 +66,8 @@ function createElectronBackend(): Backend {
 }
 
 function createBridgeBackend(): Backend {
-  const baseUrl = (import.meta as any).env?.VITE_DROPCRATE_BRIDGE_URL ?? "http://localhost:8787";
+  const baseUrl = (import.meta as any).env?.VITE_DROPCRATE_BRIDGE_URL ?? 
+                  (typeof window !== "undefined" ? window.location.origin : "http://localhost:8787");
   const listeners = new Set<(event: DropCrateEvent) => void>();
   let eventSource: EventSource | null = null;
   let currentJobId: string | null = null;

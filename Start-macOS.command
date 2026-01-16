@@ -24,7 +24,13 @@ fi
 
 echo "[2/2] Starting DropCrate..."
 echo "------------------------------------------"
-echo "The app will open at: http://localhost:5173"
+echo "The app will open at: http://localhost:8787"
 echo "------------------------------------------"
 
-npm start
+# Ensure desktop is built if dist is missing
+if [ ! -d "apps/desktop/dist" ]; then
+    echo "First time setup: Building frontend assets..."
+    npm run build:web
+fi
+
+npm run serve:web

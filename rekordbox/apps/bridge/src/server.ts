@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import { z } from "zod";
 import OpenAI from "openai";
@@ -59,7 +60,14 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-const PORT = Number(process.env.DROPCRATE_BRIDGE_PORT ?? 8787);
+// Resolve the path to the desktop dist folder
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const frontendPath = path.resolve(__dirname, "../../desktop/dist");
+
+// Serve frontend static files
+app.use(express.static(frontendPath));
+
+const PORT = Number(process.env.PORT ?? process.env.DROPCRATE_BRIDGE_PORT ?? 8787);
 const settingsPath = path.join(process.cwd(), ".dropcrate-bridge-settings.json");
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 const openaiModel = process.env.DROPCRATE_OPENAI_MODEL ?? "gpt-5.2";
@@ -516,6 +524,15 @@ app.post("/shell/reveal", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+// Fallback to index.html for SPA routing
+app.get("*", (req, res, next) => {
+  // Don't intercept API or Event routes
+  if (req.path.startsWith("/api") || req.path.startsWith("/events") || req.path.startsWith("/settings") || req.path.startsWith("/library") || req.path.startsWith("/shell")) {
+    return next();
+  }
+  res.sendFile(path.join(frontendPath, "index.html"));
+});
+
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Hoover bridge listening on http://localhost:${PORT}`);
 });

@@ -7,8 +7,10 @@
   ],
   "scripts": {
     "dev": "node scripts/bootstrap.mjs && npm run dev:web:full",
-    "start": "node scripts/bootstrap.mjs && npm run dev:web:full",
+    "start": "node scripts/bootstrap.mjs && npm run build:web && npm run serve:web",
     "build": "node scripts/bootstrap.mjs && npm -w @dropcrate/core run build && npm -w @dropcrate/cli run build",
+    "build:web": "npm run build && npm run build:desktop",
+    "serve:web": "node --import tsx apps/bridge/src/server.ts",
     "typecheck": "npm -w @dropcrate/core run typecheck && npm -w @dropcrate/core run build && npm -w @dropcrate/cli run typecheck && npm -w @dropcrate/desktop run typecheck && npm -w @dropcrate/bridge run typecheck",
     "dropcrate": "node apps/cli/dist/index.js",
     "dev:dropcrate": "node --import tsx apps/cli/src/index.ts",
