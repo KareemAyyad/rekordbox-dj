@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/
+release/
+**/release/
+.tmp/
+**/.tmp/
+
+# Caches and temporary files
+.npm/
+.npm-cache/
+.dropcrate/
+.electron-cache/
+.electron-builder-cache/
+.electron-user-data/
+.electron-cache-runtime/
+Library/
+**/Library/
+.DS_Store
+**/.DS_Store
+
+# Logs
+*.log
+**/*.log
+
+# Environment variables
+.env
+**/.env
+
+# Large binary files
+*.aiff
+**/*.aiff
+*.dmg
+**/*.dmg
+*.zip
+**/*.zip
+*.exe
+**/*.exe
+*.pkg
+**/*.pkg
+
+# App artifacts
+**/Electron Framework.framework/
+**/Electron.app/
+
+# Local data
+"DJ Library/"
+"**/DJ Library/"

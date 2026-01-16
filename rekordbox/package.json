@@ -1,0 +1,35 @@
+{
+  "name": "dropcrate",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/bootstrap.mjs && npm run dev:web:full",
+    "start": "node scripts/bootstrap.mjs && npm run dev:web:full",
+    "build": "node scripts/bootstrap.mjs && npm -w @dropcrate/core run build && npm -w @dropcrate/cli run build",
+    "typecheck": "npm -w @dropcrate/core run typecheck && npm -w @dropcrate/core run build && npm -w @dropcrate/cli run typecheck && npm -w @dropcrate/desktop run typecheck && npm -w @dropcrate/bridge run typecheck",
+    "dropcrate": "node apps/cli/dist/index.js",
+    "dev:dropcrate": "node --import tsx apps/cli/src/index.ts",
+    "dev:desktop": "npm -w @dropcrate/desktop run dev",
+    "dev:web": "npm -w @dropcrate/desktop run dev:web",
+    "build:desktop": "npm -w @dropcrate/desktop run build",
+    "pack:desktop": "npm -w @dropcrate/desktop run pack",
+    "dist:mac:arm64": "npm -w @dropcrate/desktop run dist:mac:arm64",
+    "dist:mac:arm64:zip": "npm -w @dropcrate/desktop run dist:mac:arm64:zip",
+    "dist:mac:x64": "npm -w @dropcrate/desktop run dist:mac:x64",
+    "dist:win:x64": "npm -w @dropcrate/desktop run dist:win:x64",
+    "dev:bridge": "node --import tsx apps/bridge/src/server.ts",
+    "dev:web:full": "concurrently -k \"npm run dev:bridge\" \"npm run dev:web\""
+    ,
+    "e2e:smoke": "node scripts/e2e-smoke.mjs",
+    "e2e:smoke:download": "node scripts/e2e-smoke.mjs --download",
+    "acoustid:keycheck": "node --import dotenv/config scripts/check-acoustid-key.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
