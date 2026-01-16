@@ -2,6 +2,11 @@ name: Build Installers
 
 on:
   workflow_dispatch:
+    inputs:
+      dummy:
+        description: 'Force run'
+        required: false
+        default: 'true'
   push:
     tags:
       - "v*"
