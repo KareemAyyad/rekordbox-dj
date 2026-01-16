@@ -4,13 +4,16 @@ services:
     env: docker
     plan: starter
     region: ohio
-    dockerContext: rekordbox
-    dockerfilePath: Dockerfile
+    dockerContext: .
+    dockerfilePath: rekordbox/Dockerfile
+    healthCheckPath: /health
     envVars:
       - key: OPENAI_API_KEY
         sync: false
       - key: DROPCRATE_INBOX_DIR
         value: /data/inbox
+      - key: NODE_ENV
+        value: production
     disk:
       name: hoover-storage
       mountPath: /data
