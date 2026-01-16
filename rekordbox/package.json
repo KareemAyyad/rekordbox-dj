@@ -23,15 +23,21 @@
     "dist:mac:x64": "npm -w @dropcrate/desktop run dist:mac:x64",
     "dist:win:x64": "npm -w @dropcrate/desktop run dist:win:x64",
     "dev:bridge": "node --import tsx apps/bridge/src/server.ts",
-    "dev:web:full": "concurrently -k \"npm run dev:bridge\" \"npm run dev:web\""
-    ,
+    "dev:web:full": "concurrently -k \"npm run dev:bridge\" \"npm run dev:web\"",
     "e2e:smoke": "node scripts/e2e-smoke.mjs",
     "e2e:smoke:download": "node scripts/e2e-smoke.mjs --download",
     "acoustid:keycheck": "node --import dotenv/config scripts/check-acoustid-key.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^25.0.9",
+    "@types/supertest": "^6.0.3",
+    "@vitest/ui": "^4.0.17",
     "concurrently": "^9.2.1",
+    "qs": "^6.14.1",
+    "supertest": "^7.2.2",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.17"
   }
 }

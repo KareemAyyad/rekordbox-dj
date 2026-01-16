@@ -99,17 +99,22 @@ function send(job: Job, event: any) {
 }
 
 async function loadSettings(): Promise<{ inboxDir: string; mode: "dj-safe" | "fast"; loudness: { targetI: number; targetTP: number; targetLRA: number } }> {
+  const envInboxDir = process.env.DROPCRATE_INBOX_DIR?.trim();
   try {
     const raw = await fs.readFile(settingsPath, "utf8");
     const json = JSON.parse(raw);
     const parsed = SettingsSchema.parse(json);
     return {
-      inboxDir: parsed.inboxDir ?? "",
+      inboxDir: parsed.inboxDir ?? envInboxDir ?? "",
       mode: parsed.mode ?? "dj-safe",
       loudness: parsed.loudness ?? { targetI: -14, targetTP: -1.0, targetLRA: 11 }
     };
   } catch {
-    return { inboxDir: "", mode: "dj-safe", loudness: { targetI: -14, targetTP: -1.0, targetLRA: 11 } };
+    return { 
+      inboxDir: envInboxDir ?? "", 
+      mode: "dj-safe", 
+      loudness: { targetI: -14, targetTP: -1.0, targetLRA: 11 } 
+    };
   }
 }
 
@@ -393,7 +398,6 @@ app.post("/classify", async (req, res) => {
       const parsed = ClassifyResultSchema.safeParse(parsedArgs);
       if (parsed.success) {
         const ms = Date.now() - startedAt;
-        console.log(`[classify:${requestId}] ok source=openai ms=${ms}`);
         const byId = new Map(parsed.data.results.map((r) => [r.id, r] as const));
         const orderedResults = infos.map((x) => {
           const missing = missingInfoResults.get(x.id);
@@ -402,8 +406,11 @@ app.post("/classify", async (req, res) => {
           if (r) return r;
           return { id: x.id, kind: "unknown", genre: null, energy: null, time: null, vibe: null, confidence: 0, notes: "No classification returned." };
         });
+        console.log(`[classify:${requestId}] ok source=openai ms=${ms} results=${JSON.stringify(orderedResults)}`);
         res.json({ ok: true, source: "openai", results: orderedResults, ms });
         return;
+      } else {
+        console.warn(`[classify:${requestId}] openai parse failed`, parsed.error);
       }
     } catch (err) {
       console.warn(`[classify:${requestId}] openai failed`, String((err as any)?.message ?? err));
@@ -453,9 +460,15 @@ app.get("/library", async (req, res) => {
       const outputs = json.outputs ?? {};
       const audioPath = outputs.audioPath ?? "";
       if (!audioPath) continue;
+
+      // When running on the web, provide a download URL
+      const audioFilename = path.basename(audioPath);
+      const downloadUrl = `/library/download?inboxDir=${encodeURIComponent(inboxDir)}&filename=${encodeURIComponent(audioFilename)}`;
+
       results.push({
         id: f,
         path: audioPath,
+        downloadUrl, // For web browser downloads
         artist: String(normalized.artist ?? ""),
         title: String(normalized.title ?? ""),
         genre: String(json.djDefaults?.genre ?? ""),
@@ -467,6 +480,32 @@ app.get("/library", async (req, res) => {
   }
   results.sort((a, b) => String(b.downloadedAt).localeCompare(String(a.downloadedAt)));
   res.json(results);
+});
+
+app.get("/library/download", async (req, res) => {
+  const inboxDir = String(req.query.inboxDir ?? "").trim();
+  const filename = String(req.query.filename ?? "").trim();
+
+  if (!inboxDir || !filename) {
+    return res.status(400).json({ error: "Missing inboxDir or filename" });
+  }
+
+  const filePath = path.join(inboxDir, filename);
+
+  try {
+    // Security check: ensure the file is actually inside the inboxDir
+    const absoluteInboxDir = path.resolve(inboxDir);
+    const absoluteFilePath = path.resolve(filePath);
+    if (!absoluteFilePath.startsWith(absoluteInboxDir)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    await fs.access(absoluteFilePath);
+    res.download(absoluteFilePath);
+  } catch (err) {
+    console.error("[library/download]", err);
+    res.status(404).json({ error: "File not found" });
+  }
 });
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -533,6 +572,10 @@ app.get("*", (req, res, next) => {
   res.sendFile(path.join(frontendPath, "index.html"));
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Hoover bridge listening on http://localhost:${PORT}`);
-});
+export { app };
+
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Hoover bridge listening on http://localhost:${PORT}`);
+  });
+}

@@ -81,7 +81,7 @@ export function QueueView(props: {
         prev.map((i) => {
           const r = byId.get(i.id);
           if (!r) return i;
-          const confident = (r.confidence ?? 0) >= 0.6;
+          const confident = (r.confidence ?? 0) >= 0.4;
           const musicish = r.kind === "track" || r.kind === "set";
           const nextPreset = (() => {
             if (!confident) return i.presetSnapshot;
@@ -122,7 +122,7 @@ export function QueueView(props: {
         prev.map((i) => {
           const r = byId.get(i.id);
           if (!r) return i;
-          const confident = (r.confidence ?? 0) >= 0.6;
+          const confident = (r.confidence ?? 0) >= 0.4;
           const musicish = r.kind === "track" || r.kind === "set";
           const nextPreset = (() => {
             if (!confident) return i.presetSnapshot;
@@ -354,8 +354,11 @@ export function QueueView(props: {
               Add links - DropCrate tags them automatically - Start locks tags into the exported files written to your
               Rekordbox watch folder.
             </div>
+            <p className="mt-2 text-[10px] text-[var(--dc-muted2)] leading-relaxed italic">
+              Running on web? Files are saved to the server. You can download them to your computer from the <span className="font-bold text-[var(--dc-primary)]">Library</span> tab once finished.
+            </p>
             {jobId ? (
-              <div className="mt-2 text-[10px] font-semibold text-[var(--dc-muted2)]">JOB: {jobId}</div>
+              <div className="mt-3 text-[10px] font-semibold text-[var(--dc-muted2)] uppercase tracking-tight">JOB: {jobId}</div>
             ) : null}
           </Panel>
         </div>
@@ -416,9 +419,18 @@ function QueueItemRow({
           )}
 
           {item.auto?.status === "done" && (
-            <p className="mt-1.5 text-xs text-[var(--dc-muted2)]">
-              {item.auto.kind ?? "unknown"} - {((item.auto.confidence ?? 0) * 100).toFixed(0)}% confidence
-            </p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <p className="text-xs text-[var(--dc-muted2)]">
+                {item.auto.kind ?? "unknown"} - {((item.auto.confidence ?? 0) * 100).toFixed(0)}% confidence
+              </p>
+              {item.auto.notes && (
+                <Tooltip content={item.auto.notes}>
+                  <svg className="w-3.5 h-3.5 text-[var(--dc-muted2)] cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </Tooltip>
+              )}
+            </div>
           )}
 
           {/* Error Message - Prominent display */}

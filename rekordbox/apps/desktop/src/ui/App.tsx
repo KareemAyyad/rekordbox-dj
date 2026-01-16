@@ -68,6 +68,7 @@ export function App(): JSX.Element {
     let consecutiveFailures = 0;
 
     const checkConnection = async (loadSettingsOnSuccess = false) => {
+      console.log(`[App] checkConnection(loadSettingsOnSuccess=${loadSettingsOnSuccess})`);
       try {
         const s = await backend.settings.get();
         if (cancelled) return;

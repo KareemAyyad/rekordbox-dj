@@ -164,29 +164,28 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
 
     if (outputs.audioPath || outputs.videoPath) {
       input.onProgress?.("finalize");
-      // SIDECAR JSON DISABLED - Uncomment below to re-enable for debugging
-      // const sidecar = {
-      //   sourceUrl,
-      //   sourceId,
-      //   title: info.title ?? null,
-      //   uploader: info.uploader ?? null,
-      //   duration: info.duration ?? null,
-      //   downloadedAt: new Date().toISOString(),
-      //   normalized: effectiveMeta
-      //     ? { artist: effectiveMeta.artist, title: effectiveMeta.title, version: effectiveMeta.version, album: effectiveMeta.album, year: effectiveMeta.year, label: effectiveMeta.label }
-      //     : { artist: normalized.artist, title: normalized.title, version: normalized.version, album: null, year: null, label: null },
-      //   fingerprintMatch: effectiveMeta?.match ?? null,
-      //   djDefaults: effectiveDjDefaults,
-      //   processing: {
-      //     audioFormat: input.audioFormat,
-      //     normalize: input.normalize
-      //   },
-      //   outputs
-      // };
-      // const sidecarBase = sanitizeFileComponent(
-      //   `${(effectiveMeta?.artist ?? normalized.artist) as string} - ${(effectiveMeta?.title ?? normalized.title) as string}`.trim()
-      // );
-      // await fs.writeFile(path.join(input.inboxDir, `${sidecarBase}.dropcrate.json`), JSON.stringify(sidecar, null, 2));
+      const sidecar = {
+        sourceUrl,
+        sourceId,
+        title: info.title ?? null,
+        uploader: info.uploader ?? null,
+        duration: info.duration ?? null,
+        downloadedAt: new Date().toISOString(),
+        normalized: effectiveMeta
+          ? { artist: effectiveMeta.artist, title: effectiveMeta.title, version: effectiveMeta.version, album: effectiveMeta.album, year: effectiveMeta.year, label: effectiveMeta.label }
+          : { artist: normalized.artist, title: normalized.title, version: normalized.version, album: null, year: null, label: null },
+        fingerprintMatch: effectiveMeta?.match ?? null,
+        djDefaults: effectiveDjDefaults,
+        processing: {
+          audioFormat: input.audioFormat,
+          normalize: input.normalize
+        },
+        outputs
+      };
+      const sidecarBase = sanitizeFileComponent(
+        `${(effectiveMeta?.artist ?? normalized.artist) as string} - ${(effectiveMeta?.title ?? normalized.title) as string}`.trim()
+      );
+      await fs.writeFile(path.join(input.inboxDir, `${sidecarBase}.dropcrate.json`), JSON.stringify(sidecar, null, 2));
     }
   } finally {
     await fs.rm(workDir, { recursive: true, force: true });

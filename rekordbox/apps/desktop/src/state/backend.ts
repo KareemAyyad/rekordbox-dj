@@ -24,7 +24,7 @@ export type Backend = {
     cancel: (payload?: { jobId?: string }) => Promise<boolean>;
   };
   library: {
-    list: (payload: { inboxDir: string }) => Promise<Array<{ id: string; path: string; artist: string; title: string; genre: string; downloadedAt: string }>>;
+    list: (payload: { inboxDir: string }) => Promise<Array<{ id: string; path: string; downloadUrl?: string; artist: string; title: string; genre: string; downloadedAt: string }>>;
   };
   shell: {
     open: (path: string) => Promise<boolean>;
