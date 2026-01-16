@@ -2,8 +2,10 @@ services:
   - type: web
     name: hoover-web
     env: docker
-    plan: starter # You'll likely need the 'Starter' plan for ffmpeg memory usage
+    plan: starter
     region: ohio
+    dockerContext: rekordbox
+    dockerfilePath: Dockerfile
     envVars:
       - key: OPENAI_API_KEY
         sync: false
@@ -12,4 +14,4 @@ services:
     disk:
       name: hoover-storage
       mountPath: /data
-      sizeGB: 10 # To persist your DJ Library downloads
+      sizeGB: 10
