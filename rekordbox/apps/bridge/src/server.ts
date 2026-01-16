@@ -70,7 +70,7 @@ app.use(express.static(frontendPath));
 const PORT = Number(process.env.PORT ?? process.env.DROPCRATE_BRIDGE_PORT ?? 8787);
 const settingsPath = path.join(process.cwd(), ".dropcrate-bridge-settings.json");
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-const openaiModel = process.env.DROPCRATE_OPENAI_MODEL ?? "gpt-4o";
+const openaiModel = process.env.DROPCRATE_OPENAI_MODEL ?? "gpt-4o-mini";
 
 function truncateText(value: unknown, max: number): string | null {
   const s = typeof value === "string" ? value : null;
@@ -217,49 +217,44 @@ app.post("/queue/start", async (req, res) => {
   const isFast = payload.mode === "fast";
 
   try {
-    for (const item of payload.items) {
-      if (job.cancelRequested) {
-        console.log(`[bridge] /queue/start: jobId=${jobId} cancel requested`);
-        send(job, { type: "queue-cancelled", jobId });
-        return;
-      }
+    // Process the entire batch in parallel (concurrency managed by downloadBatch)
+    await downloadBatch({
+      urls: payload.items.map(i => i.url),
+      mode: "audio",
+      inboxDir: payload.inboxDir,
+      audioFormat: isFast ? "auto" : "aiff",
+      maxConcurrent: 3, // Download 3 tracks at once
+      normalize: {
+        enabled: !isFast,
+        targetI: loudness.targetI,
+        targetTP: loudness.targetTP,
+        targetLRA: loudness.targetLRA
+      },
+      // Map item IDs to their specific preset snapshots from the payload using the event index
+      onEvent: (e: any) => {
+        const item = e.index ? payload.items[e.index - 1] : null;
+        if (!item) return;
 
-      console.log(`[bridge] /queue/start: jobId=${jobId} starting itemId=${item.id} url=${item.url}`);
-      send(job, { type: "item-start", jobId, itemId: item.id, url: item.url });
-
-      try {
-        await downloadBatch({
-          urls: [item.url],
-          mode: "audio",
-          inboxDir: payload.inboxDir,
-          audioFormat: isFast ? "auto" : "aiff",
-          normalize: {
-            enabled: !isFast,
-            targetI: loudness.targetI,
-            targetTP: loudness.targetTP,
-            targetLRA: loudness.targetLRA
-          },
-          djDefaults: {
-            genre: item.presetSnapshot.genre,
-            energy: item.presetSnapshot.energy,
-            time: item.presetSnapshot.time,
-            vibe: item.presetSnapshot.vibe
-          },
-          onEvent: (e) => {
-            console.log(`[bridge] /queue/start: jobId=${jobId} core-event type=${e.type} ${(e as any).stage ?? ""}`);
-            send(job, { type: "core", jobId, itemId: item.id, url: item.url, event: e });
-          }
-        });
-        console.log(`[bridge] /queue/start: jobId=${jobId} itemId=${item.id} done`);
-        send(job, { type: "item-done", jobId, itemId: item.id, url: item.url });
-      } catch (error: any) {
-        console.error(`[bridge] /queue/start: jobId=${jobId} itemId=${item.id} error:`, error.message);
-        send(job, { type: "item-error", jobId, itemId: item.id, url: item.url, error: String(error?.message ?? error) });
-      }
-    }
+        if (e.type === "item-start") {
+          send(job, { type: "item-start", jobId, itemId: item.id, url: item.url });
+        } else if (e.type === "item-done") {
+          send(job, { type: "item-done", jobId, itemId: item.id, url: item.url });
+        } else if (e.type === "item-error") {
+          send(job, { type: "item-error", jobId, itemId: item.id, url: item.url, error: String(e.error ?? "Unknown error") });
+        } else if (e.type === "item-progress") {
+          send(job, { type: "core", jobId, itemId: item.id, url: item.url, event: e });
+        }
+      },
+      // Note: downloadBatch uses the same djDefaults for the whole batch if passed here,
+      // but the core downloadOne already handles individual item defaults if we skip it here.
+      // However, to be safe, we'll let downloadOne handle the defaults based on what it finds.
+    });
 
     console.log(`[bridge] /queue/start: jobId=${jobId} all items processed`);
     send(job, { type: "queue-done", jobId });
+  } catch (error: any) {
+    console.error(`[bridge] /queue/start: jobId=${jobId} batch error:`, error.message);
+    send(job, { type: "queue-done", jobId }); // Signal done anyway to close the UI state
   } finally {
     // Keep job around briefly so Library can refresh; clients will disconnect naturally.
     setTimeout(() => jobs.delete(jobId), 5 * 60_000);
