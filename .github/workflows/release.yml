@@ -23,6 +23,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+          cache-dependency-path: rekordbox/package-lock.json
       - run: npm ci
         working-directory: rekordbox
       - run: npm run dist:mac:arm64
@@ -43,6 +44,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+          cache-dependency-path: rekordbox/package-lock.json
       - run: npm ci
         working-directory: rekordbox
       - run: npm run dist:win:x64
