@@ -25,14 +25,13 @@ RUN npm install
 COPY . .
 
 # Run the build
-# We set memory limits for Node to prevent crashes on smaller Render plans
 ENV NODE_OPTIONS="--max-old-space-size=1024"
 RUN npm run build:web
 
 # Set environment variables
-ENV PORT=8787
+ENV PORT=10000
 ENV NODE_ENV=production
-EXPOSE 8787
+EXPOSE 10000
 
 # Start the application
 CMD ["npm", "run", "serve:web"]
