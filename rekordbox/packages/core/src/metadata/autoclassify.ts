@@ -162,6 +162,12 @@ export function heuristicClassifyDjTags(info: MinimalInfo): DjTagSuggestion {
   if (energy || time) confidence += 0.15;
   if (vibe) confidence += 0.1;
 
+  if (confidence === 0) {
+    console.log(`[autoclassify] Zero confidence for: "${info.title}" by "${info.uploader}"`);
+    console.log(`[autoclassify] Categories: ${categories.join(", ") || "none"}`);
+    console.log(`[autoclassify] Tags: ${tags.join(", ") || "none"}`);
+  }
+
   const notes =
     kind === "podcast"
       ? "Detected long-form podcast/show; DJ tags may be less relevant."

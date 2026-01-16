@@ -40,6 +40,7 @@ type YtdlpInfo = {
 export async function downloadOne(input: DownloadOneInput): Promise<void> {
   const { ytdlp } = await createYtDlp();
 
+  console.log(`[dropcrate] downloadOne: url=${input.url} inboxDir=${input.inboxDir}`);
   input.onProgress?.("metadata");
   const infoRaw = await withTimeout(
     ytdlp.execPromise([input.url, "--dump-single-json", "--no-warnings", "--no-playlist", "--socket-timeout", "10", "--retries", "1", ...getYtDlpCookieArgs()]),
@@ -47,6 +48,7 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
     "yt-dlp metadata timed out"
   );
   const info = JSON.parse(infoRaw) as YtdlpInfo;
+  console.log(`[dropcrate] metadata: title="${info.title}" duration=${info.duration}s`);
   const sourceUrl = info.webpage_url ?? input.url;
   const sourceId = info.id ?? crypto.createHash("sha1").update(sourceUrl).digest("hex").slice(0, 10);
 
@@ -61,6 +63,7 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
     categories: info.categories ?? null,
     tags: info.tags ?? null
   });
+  console.log(`[dropcrate] classification: kind=${autoClassified.kind} genre=${autoClassified.genre} confidence=${autoClassified.confidence}`);
 
   // Merge auto-classification with provided djDefaults (caller overrides take precedence)
   const effectiveDjDefaults = {
@@ -79,6 +82,7 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
   const baseName = sanitizeFileComponent(`${normalized.artist} - ${normalized.title}`.trim());
   const workDir = path.join(input.inboxDir, `.dropcrate_tmp_${sourceId}`);
 
+  console.log(`[dropcrate] workDir: ${workDir}`);
   await fs.mkdir(workDir, { recursive: true });
 
   try {
@@ -88,6 +92,7 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
     if (input.mode === "video" || input.mode === "both") {
       input.onProgress?.("download");
       const outTemplate = path.join(workDir, `${baseName}__video.%(ext)s`);
+      console.log(`[dropcrate] downloading video: ${outTemplate}`);
       await ytdlp.execPromise([
         sourceUrl,
         "-f",
@@ -102,6 +107,7 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
       const downloadedVideo = await findByPrefix(workDir, `${baseName}__video`);
       const ext = path.extname(downloadedVideo).toLowerCase() || ".mp4";
       const finalVideoPath = path.join(input.inboxDir, `${baseName}${ext === ".mkv" ? ".mkv" : ".mp4"}`);
+      console.log(`[dropcrate] video download finished: ${downloadedVideo} -> ${finalVideoPath}`);
       await fs.rename(downloadedVideo, finalVideoPath);
       outputs.videoPath = finalVideoPath;
     }
@@ -110,6 +116,7 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
       // Download best available audio, then decide whether to keep codec or output AIFF.
       input.onProgress?.("download");
       const outTemplate = path.join(workDir, `${baseName}__audio.%(ext)s`);
+      console.log(`[dropcrate] downloading audio: ${outTemplate}`);
 
       await ytdlp.execPromise([
         sourceUrl,
@@ -122,13 +129,20 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
 
       const downloaded = await findByPrefix(workDir, `${baseName}__audio`);
       const ext = path.extname(downloaded).toLowerCase();
+      console.log(`[dropcrate] audio download finished: ${downloaded}`);
       const thumbnailPath = await maybeDownloadThumbnail(workDir, pickBestThumbnailUrl(info));
       input.onProgress?.("fingerprint");
+      console.log(`[dropcrate] fingerprinting...`);
       const matched = await tryMatchMusicMetadata({
         audioPath: downloaded,
         fallback: normalized,
         titleHadSeparator
       });
+      if (matched) {
+        console.log(`[dropcrate] fingerprint match found: ${matched.artist} - ${matched.title}`);
+      } else {
+        console.log(`[dropcrate] no fingerprint match found`);
+      }
       const effective = matched
         ? { artist: matched.artist, title: matched.title, version: matched.version, album: matched.album, year: matched.year, label: matched.label, match: matched.match }
         : { artist: normalized.artist, title: normalized.title, version: normalized.version, album: null, year: null, label: null, match: null };
@@ -147,6 +161,7 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
         sourceId
       });
 
+      console.log(`[dropcrate] finalizing audio...`);
       const finalPath = await finalizeAudio({
         downloadedPath: downloaded,
         downloadedExt: ext,
@@ -158,6 +173,7 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
         tags,
         onProgress: input.onProgress
       });
+      console.log(`[dropcrate] audio finalized: ${finalPath}`);
 
       outputs.audioPath = finalPath;
     }
@@ -185,9 +201,12 @@ export async function downloadOne(input: DownloadOneInput): Promise<void> {
       const sidecarBase = sanitizeFileComponent(
         `${(effectiveMeta?.artist ?? normalized.artist) as string} - ${(effectiveMeta?.title ?? normalized.title) as string}`.trim()
       );
-      await fs.writeFile(path.join(input.inboxDir, `${sidecarBase}.dropcrate.json`), JSON.stringify(sidecar, null, 2));
+      const sidecarPath = path.join(input.inboxDir, `${sidecarBase}.dropcrate.json`);
+      console.log(`[dropcrate] writing sidecar: ${sidecarPath}`);
+      await fs.writeFile(sidecarPath, JSON.stringify(sidecar, null, 2));
     }
   } finally {
+    console.log(`[dropcrate] cleaning up workDir: ${workDir}`);
     await fs.rm(workDir, { recursive: true, force: true });
   }
 }

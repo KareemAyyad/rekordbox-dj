@@ -22,7 +22,7 @@
     "dist:mac:arm64:zip": "npm -w @dropcrate/desktop run dist:mac:arm64:zip",
     "dist:mac:x64": "npm -w @dropcrate/desktop run dist:mac:x64",
     "dist:win:x64": "npm -w @dropcrate/desktop run dist:win:x64",
-    "dev:bridge": "node --import tsx apps/bridge/src/server.ts",
+    "dev:bridge": "DROPCRATE_YTDLP_PATH=./.dropcrate/bin/yt-dlp node --import tsx apps/bridge/src/server.ts",
     "dev:web:full": "concurrently -k \"npm run dev:bridge\" \"npm run dev:web\"",
     "e2e:smoke": "node scripts/e2e-smoke.mjs",
     "e2e:smoke:download": "node scripts/e2e-smoke.mjs --download",

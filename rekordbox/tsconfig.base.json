@@ -9,7 +9,11 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@dropcrate/core": ["./packages/core/src/index.ts"]
+    }
   }
 }
 

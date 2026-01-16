@@ -33,7 +33,8 @@ export async function createYtDlp(): Promise<{ ytdlp: YtDlpExec; binaryPath: str
 }
 
 export async function getVideoInfo(url: string, opts?: { timeoutMs?: number }): Promise<any> {
-  const timeoutMs = opts?.timeoutMs ?? 30_000;
+  const timeoutMs = opts?.timeoutMs ?? 60_000;
+  console.log(`[ytdlp] getVideoInfo: ${url} (timeout=${timeoutMs}ms)`);
   const args = [
     url,
     "--dump-single-json",

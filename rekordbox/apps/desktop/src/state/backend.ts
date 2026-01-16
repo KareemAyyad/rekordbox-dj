@@ -66,8 +66,7 @@ function createElectronBackend(): Backend {
 }
 
 function createBridgeBackend(): Backend {
-  const baseUrl = (import.meta as any).env?.VITE_DROPCRATE_BRIDGE_URL ?? 
-                  (typeof window !== "undefined" ? window.location.origin : "http://localhost:8787");
+  const baseUrl = (import.meta as any).env?.VITE_DROPCRATE_BRIDGE_URL || "";
   const listeners = new Set<(event: DropCrateEvent) => void>();
   let eventSource: EventSource | null = null;
   let currentJobId: string | null = null;
@@ -121,9 +120,8 @@ function createBridgeBackend(): Backend {
     },
     library: {
       list: async (payload) => {
-        const url = new URL(`${baseUrl}/library`);
-        url.searchParams.set("inboxDir", payload.inboxDir);
-        const res = await fetch(url.toString());
+        const url = `${baseUrl}/library?inboxDir=${encodeURIComponent(payload.inboxDir)}`;
+        const res = await fetch(url);
         if (!res.ok) throw new Error(`Bridge library failed (${res.status})`);
         return (await res.json()) as Array<{ id: string; path: string; artist: string; title: string; genre: string; downloadedAt: string }>;
       }

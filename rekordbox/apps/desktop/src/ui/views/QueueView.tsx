@@ -12,7 +12,7 @@ type QueueItem = {
   status: "queued" | "running" | "done" | "error";
   message?: string;
   presetSnapshot: { genre: string; energy: string; time: string; vibe: string };
-  auto?: { status: "idle" | "running" | "done" | "error"; confidence?: number; notes?: string; kind?: string };
+  auto?: { status: "idle" | "running" | "done" | "error"; confidence?: number; notes?: string; kind?: string; stage?: string };
 };
 
 export function QueueView(props: {
@@ -73,7 +73,9 @@ export function QueueView(props: {
 
   const autoClassify = async (targets: Array<{ id: string; url: string }>) => {
     if (backend.kind !== "bridge") return;
-    setItems((prev) => prev.map((i) => (targets.some((t) => t.id === i.id) ? { ...i, auto: { status: "running" } } : i)));
+    setItems((prev) =>
+      prev.map((i) => (targets.some((t) => t.id === i.id) ? { ...i, auto: { status: "running", stage: "CLASSIFYING" } } : i))
+    );
     try {
       const result = await backend.classify({ items: targets });
       const byId = new Map(result.results.map((r) => [r.id, r]));
@@ -112,7 +114,9 @@ export function QueueView(props: {
   const classifyForStart = async (queued: QueueItem[]): Promise<Map<string, QueueItem["presetSnapshot"]>> => {
     if (backend.kind !== "bridge") return new Map();
     const targets = queued.map((q) => ({ id: q.id, url: q.url }));
-    setItems((prev) => prev.map((i) => (targets.some((t) => t.id === i.id) ? { ...i, auto: { status: "running" } } : i)));
+    setItems((prev) =>
+      prev.map((i) => (targets.some((t) => t.id === i.id) ? { ...i, auto: { status: "running", stage: "CLASSIFYING" } } : i))
+    );
     try {
       const result = await backend.classify({ items: targets });
       const byId = new Map(result.results.map((r) => [r.id, r] as const));
@@ -165,14 +169,32 @@ export function QueueView(props: {
       unsubscribeRef.current = backend.onEvent((evt) => {
         if (evt.type === "queue-start") setJobId(evt.jobId);
         if (evt.type === "item-done") {
-          setItems((prev) => prev.map((i) => (i.id === evt.itemId ? { ...i, status: "done" } : i)));
+          setItems((prev) =>
+            prev.map((i) =>
+              i.id === evt.itemId ? { ...i, status: "done", auto: { ...i.auto, status: "done", stage: undefined } } : i
+            )
+          );
         }
         if (evt.type === "item-error") {
-          setItems((prev) => prev.map((i) => (i.id === evt.itemId ? { ...i, status: "error", message: evt.error } : i)));
+          setItems((prev) =>
+            prev.map((i) =>
+              i.id === evt.itemId
+                ? { ...i, status: "error", message: evt.error, auto: { ...i.auto, status: "error", stage: undefined } }
+                : i
+            )
+          );
           addToast("error", `Download failed: ${evt.error?.slice(0, 100) ?? "Unknown error"}`);
         }
         if (evt.type === "item-start") {
           setItems((prev) => prev.map((i) => (i.id === evt.itemId ? { ...i, status: "running" } : i)));
+        }
+        if (evt.type === "core") {
+          const coreEvt = evt.event as any;
+          if (coreEvt.type === "item-progress") {
+            setItems((prev) =>
+              prev.map((i) => (i.id === evt.itemId ? { ...i, auto: { ...i.auto, status: "running", stage: coreEvt.stage } } : i))
+            );
+          }
         }
         if (evt.type === "queue-done") {
           setRunning(false);
@@ -404,7 +426,7 @@ function QueueItemRow({
           <p className="truncate text-sm font-medium text-[var(--dc-text)]">{item.url}</p>
 
           {/* Auto-classification status */}
-          {item.auto?.status === "running" && (
+          {(item.auto?.status === "running" || item.status === "running") && (
             <p className="mt-1.5 text-xs text-[var(--dc-muted)] flex items-center gap-1.5">
               <svg className="w-3 h-3 dc-animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
@@ -414,7 +436,13 @@ function QueueItemRow({
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              Auto-classifying...
+              {item.auto?.stage ? (
+                <span className="uppercase font-semibold tracking-wider text-[var(--dc-accent)]">
+                  Stage: {item.auto.stage}
+                </span>
+              ) : (
+                "Processing..."
+              )}
             </p>
           )}
 

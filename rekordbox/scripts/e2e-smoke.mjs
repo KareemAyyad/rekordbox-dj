@@ -13,6 +13,8 @@ const base = `http://localhost:${PORT}`;
 const ytdlp = "./.dropcrate/bin/yt-dlp";
 
 const queries = [
+  { q: "https://www.youtube.com/watch?v=5vheNbQvFpg", name: "Afro House Track (Real Link)" },
+  { q: "https://www.youtube.com/watch?v=XvSInA8vU-E", name: "Deep House Set (Real Link)" },
   { q: "afro house dj set" },
   { q: "afro house mix 2024" },
   { q: "organic house mix" },
@@ -47,6 +49,7 @@ async function fetchJson(url, init) {
 }
 
 async function ytsearch1(q) {
+  if (q.startsWith("http")) return q;
   const { stdout } = await exec(
     ytdlp,
     [

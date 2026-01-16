@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 import { getBackend } from "../../state/backend";
 import { useToast } from "../components/Toast";
 import { Badge, Button, Card, Select, Skeleton, TextInput } from "../components/ui";
@@ -179,6 +180,7 @@ export function LibraryView(props: { settings: { inboxDir: string } }): JSX.Elem
   // Search & Sort state
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("date");
+  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,8 +188,10 @@ export function LibraryView(props: { settings: { inboxDir: string } }): JSX.Elem
       setLoading(true);
       setError(null);
       try {
+        console.log(`[LibraryView] Loading tracks from ${props.settings.inboxDir}`);
         const res = await backend.library.list({ inboxDir: props.settings.inboxDir });
         if (cancelled) return;
+        console.log(`[LibraryView] Found ${res.length} tracks`);
         setItems(res);
       } catch (e: unknown) {
         if (cancelled) return;
@@ -202,7 +206,7 @@ export function LibraryView(props: { settings: { inboxDir: string } }): JSX.Elem
     return () => {
       cancelled = true;
     };
-  }, [props.settings.inboxDir, backend.library]);
+  }, [props.settings.inboxDir, backend.library, refreshCount]);
 
   // Filter and sort items
   const filteredItems = useMemo(() => {
@@ -245,9 +249,17 @@ export function LibraryView(props: { settings: { inboxDir: string } }): JSX.Elem
             Your downloaded tracks from inbox sidecars
           </p>
         </div>
-        <Badge className="rounded-xl px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide">
-          {items.length} {items.length === 1 ? "Track" : "Tracks"}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setRefreshCount(v => v + 1)} disabled={loading}>
+            <svg className={clsx("h-3.5 w-3.5 mr-1.5", loading && "dc-animate-spin")} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </Button>
+          <Badge className="rounded-xl px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide">
+            {items.length} {items.length === 1 ? "Track" : "Tracks"}
+          </Badge>
+        </div>
       </div>
 
       {/* Error State */}

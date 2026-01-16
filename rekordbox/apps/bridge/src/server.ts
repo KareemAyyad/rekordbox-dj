@@ -70,7 +70,7 @@ app.use(express.static(frontendPath));
 const PORT = Number(process.env.PORT ?? process.env.DROPCRATE_BRIDGE_PORT ?? 8787);
 const settingsPath = path.join(process.cwd(), ".dropcrate-bridge-settings.json");
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-const openaiModel = process.env.DROPCRATE_OPENAI_MODEL ?? "gpt-5.2";
+const openaiModel = process.env.DROPCRATE_OPENAI_MODEL ?? "gpt-4o";
 
 function truncateText(value: unknown, max: number): string | null {
   const s = typeof value === "string" ? value : null;
@@ -99,19 +99,19 @@ function send(job: Job, event: any) {
 }
 
 async function loadSettings(): Promise<{ inboxDir: string; mode: "dj-safe" | "fast"; loudness: { targetI: number; targetTP: number; targetLRA: number } }> {
-  const envInboxDir = process.env.DROPCRATE_INBOX_DIR?.trim();
+  const envInboxDir = process.env.DROPCRATE_INBOX_DIR?.trim() || path.join(process.cwd(), "DJ Library/00_INBOX");
   try {
     const raw = await fs.readFile(settingsPath, "utf8");
     const json = JSON.parse(raw);
     const parsed = SettingsSchema.parse(json);
     return {
-      inboxDir: parsed.inboxDir ?? envInboxDir ?? "",
+      inboxDir: (parsed.inboxDir?.trim() || envInboxDir).trim(),
       mode: parsed.mode ?? "dj-safe",
       loudness: parsed.loudness ?? { targetI: -14, targetTP: -1.0, targetLRA: 11 }
     };
   } catch {
     return { 
-      inboxDir: envInboxDir ?? "", 
+      inboxDir: envInboxDir, 
       mode: "dj-safe", 
       loudness: { targetI: -14, targetTP: -1.0, targetLRA: 11 } 
     };
@@ -198,6 +198,7 @@ app.post("/queue/start", async (req, res) => {
   try {
     payload = QueueStartSchema.parse(req.body);
   } catch (err: any) {
+    console.error("[bridge] /queue/start: Validation failed", err.message);
     return res.status(400).json({ error: "Invalid request", details: err?.message ?? String(err) });
   }
   const settings = await loadSettings();
@@ -208,6 +209,7 @@ app.post("/queue/start", async (req, res) => {
   const loudness = payload.loudness ?? settings.loudness;
   const count = payload.items.length;
 
+  console.log(`[bridge] /queue/start: jobId=${jobId} items=${count} inboxDir=${payload.inboxDir}`);
   res.json({ jobId });
 
   send(job, { type: "queue-start", jobId, count, inboxDir: payload.inboxDir, mode: payload.mode });
@@ -217,10 +219,12 @@ app.post("/queue/start", async (req, res) => {
   try {
     for (const item of payload.items) {
       if (job.cancelRequested) {
+        console.log(`[bridge] /queue/start: jobId=${jobId} cancel requested`);
         send(job, { type: "queue-cancelled", jobId });
         return;
       }
 
+      console.log(`[bridge] /queue/start: jobId=${jobId} starting itemId=${item.id} url=${item.url}`);
       send(job, { type: "item-start", jobId, itemId: item.id, url: item.url });
 
       try {
@@ -241,14 +245,20 @@ app.post("/queue/start", async (req, res) => {
             time: item.presetSnapshot.time,
             vibe: item.presetSnapshot.vibe
           },
-          onEvent: (e) => send(job, { type: "core", jobId, itemId: item.id, url: item.url, event: e })
+          onEvent: (e) => {
+            console.log(`[bridge] /queue/start: jobId=${jobId} core-event type=${e.type} ${(e as any).stage ?? ""}`);
+            send(job, { type: "core", jobId, itemId: item.id, url: item.url, event: e });
+          }
         });
+        console.log(`[bridge] /queue/start: jobId=${jobId} itemId=${item.id} done`);
         send(job, { type: "item-done", jobId, itemId: item.id, url: item.url });
       } catch (error: any) {
+        console.error(`[bridge] /queue/start: jobId=${jobId} itemId=${item.id} error:`, error.message);
         send(job, { type: "item-error", jobId, itemId: item.id, url: item.url, error: String(error?.message ?? error) });
       }
     }
 
+    console.log(`[bridge] /queue/start: jobId=${jobId} all items processed`);
     send(job, { type: "queue-done", jobId });
   } finally {
     // Keep job around briefly so Library can refresh; clients will disconnect naturally.
@@ -289,7 +299,7 @@ app.post("/classify", async (req, res) => {
   const infos = await Promise.all(
     payload.items.map(async (it) => {
       try {
-        const info = await getVideoInfo(it.url, { timeoutMs: 45_000 });
+        const info = await getVideoInfo(it.url, { timeoutMs: 60_000 });
         return { id: it.id, url: it.url, info };
       } catch (e: any) {
         const msg = String(e?.stderr ?? e?.message ?? e);
@@ -331,69 +341,63 @@ app.post("/classify", async (req, res) => {
         fetchError: x.info ? null : truncateText((x as any).error ?? null, 400)
       }));
 
-      const response = await openai.responses.create(
+      const response = await openai.chat.completions.create(
         {
-        model: openaiModel as any,
-        input: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "You are an expert touring DJ assistant. You classify YouTube items into Rekordbox-friendly DJ tags.\n\nRules:\n- If you are not confident, set fields to null (do not guess).\n- If it is not a music item (tutorial, vlog, interview, talking-head, podcast), set kind accordingly and set genre/energy/time/vibe to null.\n- Tutorials about DJing are NOT sets (kind=video), even if they contain a short demo mix.\n- Allowed genres: Afro House, House, Melodic House & Techno, Tech House, Deep House, Progressive House, Other.\n- If the content is primarily Techno / Melodic Techno, map genre to \"Melodic House & Techno\".\n- If fetchError is present, set kind=unknown, set genre/energy/time/vibe to null, confidence=0, and include fetchError in notes.\n- Energy must be one of: 1/5, 2/5, 3/5, 4/5, 5/5.\n- Time must be one of: Warmup, Peak, Closing.\n- Vibe is a comma-separated string using only relevant terms when supported (Organic, Tribal, Latin, Minimal, Dark, Vocal, Instrumental, Driving, Hypnotic)."
-              }
-            ]
-          },
-          {
-            role: "user",
-            content: [{ type: "input_text", text: `Classify the following items:\n${JSON.stringify(input)}` }]
-          }
-        ],
-        tools: [
-          {
-            type: "function",
-            name: "classify_dj_tags",
-            strict: true,
-            description: "Return DJ tag classification for each item id.",
-            parameters: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                results: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                      id: { type: "string" },
-                      kind: { type: "string", enum: ["track", "set", "podcast", "video", "unknown"] },
-                      genre: { type: ["string", "null"], enum: ["Afro House", "House", "Melodic House & Techno", "Tech House", "Deep House", "Progressive House", "Other", null] },
-                      energy: { type: ["string", "null"], enum: ["1/5", "2/5", "3/5", "4/5", "5/5", null] },
-                      time: { type: ["string", "null"], enum: ["Warmup", "Peak", "Closing", null] },
-                      vibe: { type: ["string", "null"] },
-                      confidence: { type: "number" },
-                      notes: { type: "string" }
-                    },
-                    required: ["id", "kind", "genre", "energy", "time", "vibe", "confidence", "notes"]
-                  }
-                }
-              },
-              required: ["results"]
+          model: openaiModel as any,
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert touring DJ assistant. You classify YouTube items into Rekordbox-friendly DJ tags.\n\nRules:\n- If you are not confident, set fields to null (do not guess).\n- If it is not a music item (tutorial, vlog, interview, talking-head, podcast), set kind accordingly and set genre/energy/time/vibe to null.\n- Tutorials about DJing are NOT sets (kind=video), even if they contain a short demo mix.\n- Allowed genres: Afro House, House, Melodic House & Techno, Tech House, Deep House, Progressive House, Other.\n- If the content is primarily Techno / Melodic Techno, map genre to \"Melodic House & Techno\".\n- If fetchError is present, set kind=unknown, set genre/energy/time/vibe to null, confidence=0, and include fetchError in notes.\n- Energy must be one of: 1/5, 2/5, 3/5, 4/5, 5/5.\n- Time must be one of: Warmup, Peak, Closing.\n- Vibe is a comma-separated string using only relevant terms when supported (Organic, Tribal, Latin, Minimal, Dark, Vocal, Instrumental, Driving, Hypnotic)."
+            },
+            {
+              role: "user",
+              content: `Classify the following items:\n${JSON.stringify(input)}`
             }
-          }
-        ],
-        tool_choice: { type: "function", name: "classify_dj_tags" },
-        temperature: 0.2,
-        max_output_tokens: 4000
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "classify_dj_tags",
+                strict: true,
+                description: "Return DJ tag classification for each item id.",
+                parameters: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    results: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        additionalProperties: false,
+                        properties: {
+                          id: { type: "string" },
+                          kind: { type: "string", enum: ["track", "set", "podcast", "video", "unknown"] },
+                          genre: { type: ["string", "null"], enum: ["Afro House", "House", "Melodic House & Techno", "Tech House", "Deep House", "Progressive House", "Other", null] },
+                          energy: { type: ["string", "null"], enum: ["1/5", "2/5", "3/5", "4/5", "5/5", null] },
+                          time: { type: ["string", "null"], enum: ["Warmup", "Peak", "Closing", null] },
+                          vibe: { type: ["string", "null"] },
+                          confidence: { type: "number" },
+                          notes: { type: "string" }
+                        },
+                        required: ["id", "kind", "genre", "energy", "time", "vibe", "confidence", "notes"]
+                      }
+                    }
+                  },
+                  required: ["results"]
+                }
+              }
+            }
+          ],
+          tool_choice: { type: "function", function: { name: "classify_dj_tags" } },
+          temperature: 0.2,
+          max_tokens: 4000
         },
-        { timeout: 90_000 } as any
+        { timeout: 90_000 }
       );
 
-      const toolCall = response.output.find(
-        (o): o is { type: "function_call"; name: string; arguments: string; call_id: string } => o.type === "function_call" && (o as any).name === "classify_dj_tags"
-      );
-      const argsText = toolCall ? toolCall.arguments : null;
+      const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+      const argsText = toolCall ? toolCall.function.arguments : null;
       const parsedArgs = argsText ? JSON.parse(argsText) : null;
       const parsed = ClassifyResultSchema.safeParse(parsedArgs);
       if (parsed.success) {
@@ -440,16 +444,22 @@ app.post("/classify", async (req, res) => {
 
 app.get("/library", async (req, res) => {
   const inboxDir = String(req.query.inboxDir ?? "").trim();
-  if (!inboxDir) return res.json([]);
+  if (!inboxDir) {
+    console.log("[bridge] /library: Missing inboxDir");
+    return res.json([]);
+  }
 
   let entries: string[] = [];
   try {
     entries = await fs.readdir(inboxDir);
-  } catch {
+    console.log(`[bridge] /library: Scanning ${inboxDir}, found ${entries.length} entries`);
+  } catch (err: any) {
+    console.warn(`[bridge] /library: Failed to read ${inboxDir}: ${err.message}`);
     return res.json([]);
   }
 
   const sidecars = entries.filter((f) => f.endsWith(".dropcrate.json"));
+  console.log(`[bridge] /library: Found ${sidecars.length} sidecar files`);
   const results: any[] = [];
   for (const f of sidecars) {
     const p = path.join(inboxDir, f);
@@ -459,7 +469,10 @@ app.get("/library", async (req, res) => {
       const normalized = json.normalized ?? {};
       const outputs = json.outputs ?? {};
       const audioPath = outputs.audioPath ?? "";
-      if (!audioPath) continue;
+      if (!audioPath) {
+        console.log(`[bridge] /library: Sidecar ${f} missing audioPath`);
+        continue;
+      }
 
       // When running on the web, provide a download URL
       const audioFilename = path.basename(audioPath);
@@ -474,8 +487,8 @@ app.get("/library", async (req, res) => {
         genre: String(json.djDefaults?.genre ?? ""),
         downloadedAt: String(json.downloadedAt ?? "")
       });
-    } catch {
-      // ignore
+    } catch (err: any) {
+      console.warn(`[bridge] /library: Failed to read sidecar ${f}: ${err.message}`);
     }
   }
   results.sort((a, b) => String(b.downloadedAt).localeCompare(String(a.downloadedAt)));
@@ -575,7 +588,16 @@ app.get("*", (req, res, next) => {
 export { app };
 
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Hoover bridge listening on http://localhost:${PORT}`);
+    const settings = await loadSettings();
+    console.log(`[bridge] Current settings: inboxDir=${settings.inboxDir} mode=${settings.mode}`);
+    try {
+      await fs.mkdir(settings.inboxDir, { recursive: true });
+      await fs.access(settings.inboxDir, fs.constants.W_OK);
+      console.log(`[bridge] inboxDir "${settings.inboxDir}" is writable`);
+    } catch (err: any) {
+      console.error(`[bridge] CRITICAL: inboxDir "${settings.inboxDir}" is NOT writable:`, err.message);
+    }
   });
 }
