@@ -75,19 +75,26 @@ class RunPodBackend:
 
     async def _submit_job(self, payload: dict) -> str:
         """Submit an async job to RunPod. Returns job ID."""
-        async with httpx.AsyncClient(timeout=30) as client:
+        logger.info("RunPod: submitting job to %s/run ...", self._base_url)
+        async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 f"{self._base_url}/run",
                 json={"input": payload},
                 headers=self._headers,
             )
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                body = resp.text[:500]
+                logger.error("RunPod submit failed (%s): %s", resp.status_code, body)
+                raise RuntimeError(f"RunPod submit failed ({resp.status_code}): {body}")
             data = resp.json()
-            return data["id"]
+            job_id = data["id"]
+            logger.info("RunPod: job submitted — id=%s", job_id)
+            return job_id
 
     async def _poll_job(self, job_id: str, timeout: float = 600) -> dict:
         """Poll RunPod job until complete. Returns output dict."""
         start = time.monotonic()
+        poll_count = 0
         async with httpx.AsyncClient(timeout=30) as client:
             while time.monotonic() - start < timeout:
                 resp = await client.get(
@@ -98,13 +105,24 @@ class RunPodBackend:
                 data = resp.json()
 
                 status = data.get("status")
+                poll_count += 1
+                elapsed = round(time.monotonic() - start, 1)
+
                 if status == "COMPLETED":
+                    logger.info("RunPod: job %s COMPLETED after %.1fs (%d polls)", job_id, elapsed, poll_count)
                     return data["output"]
                 if status == "FAILED":
-                    raise RuntimeError(f"RunPod job failed: {data.get('error', 'unknown')}")
+                    error = data.get("error", "unknown")
+                    logger.error("RunPod: job %s FAILED after %.1fs: %s", job_id, elapsed, error)
+                    raise RuntimeError(f"RunPod job failed: {error}")
+
+                # Log status periodically (every 5th poll = ~10 seconds)
+                if poll_count % 5 == 1:
+                    logger.info("RunPod: job %s status=%s (%.1fs, poll #%d)", job_id, status, elapsed, poll_count)
 
                 await asyncio.sleep(2)
 
+        logger.error("RunPod: job %s timed out after %.0fs", job_id, timeout)
         raise TimeoutError("RunPod job timed out")
 
     async def separate(
@@ -118,6 +136,7 @@ class RunPodBackend:
         reranking_candidates: int = 1,
     ) -> dict:
         """Send audio to RunPod for separation, save results locally."""
+        logger.info("RunPod: separating '%s' (prompt='%s')", label, prompt)
         audio_b64 = _audio_file_to_base64(audio_path)
 
         payload = {
