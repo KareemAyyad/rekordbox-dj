@@ -26,6 +26,17 @@ export const FORMAT_OPTIONS = [
   { value: "mp3", label: "MP3", desc: "Lossy, small file size" },
 ] as const;
 
+export const SEGMENT_CATEGORIES = [
+  { label: "Vocals", desc: "Singing voice and vocal harmonies" },
+  { label: "Drums & Percussion", desc: "Drums, hi-hats, cymbals, and percussion" },
+  { label: "Bass", desc: "Bass line and sub bass" },
+  { label: "Guitar", desc: "Guitar, acoustic and electric" },
+  { label: "Piano & Keys", desc: "Piano, keyboard, and synth melodies" },
+  { label: "Pads & Atmosphere", desc: "Ambient pads and atmospheric textures" },
+  { label: "Strings", desc: "Strings, violins, and orchestral elements" },
+  { label: "Effects & FX", desc: "Sound effects, risers, sweeps, and transitions" },
+] as const;
+
 export const STAGE_LABELS: Record<string, string> = {
   metadata: "Fetching info",
   classify: "Classifying",

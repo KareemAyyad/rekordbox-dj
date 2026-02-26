@@ -1,8 +1,7 @@
-import type { NextConfig } from "next";
-
 const isProd = process.env.NODE_ENV === "production";
 
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   // In production, export static HTML served by FastAPI.
   // In development, use Next.js dev server with API proxy.
   ...(isProd ? { output: "export", trailingSlash: true } : {}),

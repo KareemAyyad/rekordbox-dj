@@ -71,6 +71,7 @@ export function TopNav() {
         <nav className="flex items-center gap-2 rounded-2xl bg-[var(--dc-card)] p-1 ring-1 ring-[color:var(--dc-border)]">
           <TabButton tab="queue" label="Queue" />
           <TabButton tab="library" label="Library" />
+          <TabButton tab="segment" label="Segment" />
           <TabButton tab="settings" label="Settings" />
         </nav>
 

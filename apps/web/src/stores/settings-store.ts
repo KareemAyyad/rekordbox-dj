@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS: Settings = {
   audio_format: "aiff",
   normalize_enabled: true,
   loudness: { target_i: -14, target_tp: -1, target_lra: 11 },
+  rekordbox_xml_enabled: true,
 };
 
 export const useSettingsStore = create<SettingsStore>((set) => ({

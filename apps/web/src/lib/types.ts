@@ -1,4 +1,4 @@
-export type AppTab = "queue" | "library" | "settings";
+export type AppTab = "queue" | "library" | "settings" | "segment";
 
 export type QueueItemStatus = "queued" | "running" | "done" | "error";
 
@@ -63,6 +63,7 @@ export type Settings = {
   audio_format: "aiff" | "wav" | "flac" | "mp3";
   normalize_enabled: boolean;
   loudness: LoudnessConfig;
+  rekordbox_xml_enabled: boolean;
 };
 
 export type ClassifyResult = {
@@ -83,3 +84,32 @@ export type SSEEvent =
   | { type: "item-done"; job_id: string; item_id: string; url: string }
   | { type: "item-error"; job_id: string; item_id: string; url: string; error: string }
   | { type: "queue-done"; job_id: string };
+
+// --- Segment (SAM-Audio) ---
+
+export type SegmentItem = {
+  id: string;
+  prompt: string;
+  label: string;
+  targetUrl: string;
+  residualUrl: string;
+  durationSeconds: number;
+};
+
+export type SegmentSession = {
+  id: string;
+  filename: string;
+  durationSeconds: number;
+  sampleRate: number;
+  channels: number;
+};
+
+export type SegmentSSEEvent =
+  | { type: "auto-start"; total: number }
+  | { type: "model-loading" }
+  | { type: "model-ready" }
+  | { type: "segment-start"; label: string; index: number; total: number }
+  | { type: "segment-done"; segment: SegmentItem }
+  | { type: "segment-error"; prompt: string; error: string }
+  | { type: "auto-done"; segments: SegmentItem[] }
+  | { type: "auto-error"; error: string };

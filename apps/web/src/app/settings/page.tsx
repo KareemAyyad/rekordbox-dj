@@ -269,6 +269,30 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Rekordbox Integration */}
+      <div className="mt-8 space-y-4">
+        <h2 className="text-sm font-semibold text-[var(--dc-text)]">Rekordbox Integration</h2>
+        <div className="rounded-2xl border border-[color:var(--dc-border)] bg-[var(--dc-card2)] p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="rekordbox-xml"
+              checked={settings.rekordbox_xml_enabled}
+              onChange={(e) => updateSettings({ rekordbox_xml_enabled: e.target.checked })}
+              className="h-4 w-4 rounded border-[var(--dc-border-strong)] text-[var(--dc-accent)] focus:ring-[var(--dc-accent-ring)]"
+            />
+            <label htmlFor="rekordbox-xml" className="text-sm text-[var(--dc-text)]">
+              Generate Rekordbox XML after each batch
+            </label>
+          </div>
+          <p className="text-xs text-[var(--dc-muted)]">
+            Creates a <code className="rounded bg-[var(--dc-chip)] px-1 py-0.5 text-[10px] font-mono">dropcrate_import.xml</code> file
+            in your inbox folder with auto-generated playlists by genre, energy, and time slot.
+            Import in Rekordbox via File &gt; Import Collection in XML format.
+          </p>
+        </div>
+      </div>
+
       {/* Save Button */}
       <div className="mt-8 flex justify-end">
         <button

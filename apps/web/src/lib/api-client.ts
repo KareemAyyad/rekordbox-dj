@@ -1,6 +1,19 @@
-import type { ClassifyResult, LibraryItem, Settings } from "./types";
+import type { ClassifyResult, LibraryItem, SegmentItem, SegmentSession, Settings } from "./types";
 
 const API_BASE = typeof window !== "undefined" ? "" : "http://localhost:8000";
+
+/** Map a backend segment (snake_case) to frontend SegmentItem (camelCase). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mapSegment(s: any): SegmentItem {
+  return {
+    id: s.id,
+    prompt: s.prompt,
+    label: s.label,
+    targetUrl: s.target_url ?? s.targetUrl,
+    residualUrl: s.residual_url ?? s.residualUrl,
+    durationSeconds: s.duration_seconds ?? s.durationSeconds,
+  };
+}
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -52,4 +65,58 @@ export const api = {
 
   getLibrary: (search = "", sort = "date") =>
     apiFetch<LibraryItem[]>(`/api/library?search=${encodeURIComponent(search)}&sort=${sort}`),
+
+  exportRekordboxXml: () => {
+    window.open(`${API_BASE}/api/library/rekordbox-xml`, "_blank");
+  },
+
+  // --- Segment (SAM-Audio) ---
+
+  uploadAudio: async (file: File): Promise<SegmentSession> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE}/api/segment/upload`, { method: "POST", body: form });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Upload failed ${res.status}: ${text}`);
+    }
+    const data = await res.json();
+    return {
+      id: data.session_id,
+      filename: data.filename,
+      durationSeconds: data.duration_seconds,
+      sampleRate: data.sample_rate,
+      channels: data.channels,
+    };
+  },
+
+  separateAudio: async (params: {
+    session_id: string;
+    prompt: string;
+    guidance_scale?: number;
+    num_steps?: number;
+    reranking_candidates?: number;
+  }): Promise<{ ok: boolean; segment: SegmentItem }> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await apiFetch<any>("/api/segment/separate", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+    return { ok: data.ok, segment: mapSegment(data.segment) };
+  },
+
+  autoSegment: (params: {
+    session_id: string;
+    categories?: string[];
+    guidance_scale?: number;
+    num_steps?: number;
+    reranking_candidates?: number;
+  }) =>
+    apiFetch<{ ok: boolean; job_id: string }>("/api/segment/auto", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+
+  deleteSegmentSession: (sessionId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/segment/session/${sessionId}`, { method: "DELETE" }),
 };
