@@ -16,16 +16,20 @@ RUN pnpm --filter @dropcrate/web build
 # Stage 2: Python runtime
 FROM python:3.12-slim
 
-# Install ffmpeg + fpcalc (for Chromaprint fingerprinting)
+# Install ffmpeg + fpcalc + libsndfile (for audio processing)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg curl libchromaprint-tools && \
+    apt-get install -y --no-install-recommends ffmpeg curl libchromaprint-tools libsndfile1 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install Python dependencies
-COPY packages/api/pyproject.toml packages/api/requirements.txt* ./
-RUN pip install --no-cache-dir -e . 2>/dev/null || pip install --no-cache-dir fastapi uvicorn aiosqlite pydantic yt-dlp openai httpx python-dotenv python-multipart
+# Install Python dependencies from requirements.txt
+COPY packages/api/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install the package itself
+COPY packages/api/pyproject.toml ./
+RUN pip install --no-cache-dir -e . 2>/dev/null || true
 
 # Copy API source
 COPY packages/api/ ./
@@ -33,13 +37,14 @@ COPY packages/api/ ./
 # Copy Next.js static build
 COPY --from=frontend /build/apps/web/out /app/static
 
-# Create data directory
-RUN mkdir -p /data/inbox
+# Create data directories
+RUN mkdir -p /data/inbox /data/segments
 
 ENV PORT=10000
 ENV DROPCRATE_INBOX_DIR=/data/inbox
 ENV DROPCRATE_DATABASE_PATH=/data/dropcrate.db
 ENV DROPCRATE_STATIC_DIR=/app/static
+ENV DROPCRATE_SEGMENTS_DIR=/data/segments
 
 EXPOSE 10000
 
