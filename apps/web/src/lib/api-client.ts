@@ -66,9 +66,64 @@ export const api = {
   getLibrary: (search = "", sort = "date") =>
     apiFetch<LibraryItem[]>(`/api/library?search=${encodeURIComponent(search)}&sort=${sort}`),
 
-  exportRekordboxXml: () => {
-    window.open(`${API_BASE}/api/library/rekordbox-xml`, "_blank");
+  exportRekordboxXml: async () => {
+    const res = await fetch(`${API_BASE}/api/library/rekordbox-xml`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Export failed ${res.status}: ${text}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "dropcrate_import.xml";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   },
+
+  // --- YouTube Auth (OAuth2 device flow) ---
+
+  getYoutubeAuthStatus: () =>
+    apiFetch<{ authenticated: boolean; method: string }>("/api/settings/youtube-auth/status"),
+
+  startYoutubeAuth: () =>
+    apiFetch<{
+      device_code: string;
+      user_code: string;
+      verification_url: string;
+      expires_in: number;
+      interval: number;
+    }>("/api/settings/youtube-auth/start", { method: "POST" }),
+
+  pollYoutubeAuth: (deviceCode: string) =>
+    apiFetch<{ status: string; error?: string }>("/api/settings/youtube-auth/poll", {
+      method: "POST",
+      body: JSON.stringify({ device_code: deviceCode }),
+    }),
+
+  revokeYoutubeAuth: () =>
+    apiFetch<{ ok: boolean }>("/api/settings/youtube-auth", { method: "DELETE" }),
+
+  // --- YouTube Cookies (fallback) ---
+
+  getYoutubeCookiesStatus: () =>
+    apiFetch<{ configured: boolean; source: string }>("/api/settings/youtube-cookies"),
+
+  uploadYoutubeCookies: async (file: File): Promise<{ ok: boolean; error?: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE}/api/settings/youtube-cookies`, { method: "POST", body: form });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Upload failed ${res.status}: ${text}`);
+    }
+    return res.json();
+  },
+
+  deleteYoutubeCookies: () =>
+    apiFetch<{ ok: boolean }>("/api/settings/youtube-cookies", { method: "DELETE" }),
 
   // --- Segment (SAM-Audio) ---
 

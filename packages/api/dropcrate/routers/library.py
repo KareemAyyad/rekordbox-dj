@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import shutil
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from dropcrate.database import get_db
 from dropcrate.models.schemas import LibraryItem
@@ -78,6 +80,7 @@ async def export_rekordbox_xml():
         path=str(xml_path),
         filename="dropcrate_import.xml",
         media_type="application/xml",
+        background=BackgroundTask(shutil.rmtree, str(tmp_dir), True),
     )
 
 

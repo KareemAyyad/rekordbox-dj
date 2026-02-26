@@ -111,7 +111,9 @@ export default function LibraryPage() {
         <div className="flex items-center gap-2">
           {items.length > 0 && (
             <button
-              onClick={() => api.exportRekordboxXml()}
+              onClick={() => {
+                api.exportRekordboxXml().catch(() => toast.error("Failed to export XML"));
+              }}
               className="flex items-center gap-1.5 rounded-xl bg-[var(--dc-accent-bg)] px-3 py-1.5 text-xs font-medium text-[var(--dc-accent-text)] hover:opacity-80 transition"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

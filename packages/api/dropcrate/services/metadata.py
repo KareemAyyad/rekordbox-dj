@@ -18,10 +18,7 @@ def _get_ydl_opts() -> dict:
         "socket_timeout": 10,
         "retries": 1,
     }
-    if config.COOKIES_FROM_BROWSER:
-        opts["cookiesfrombrowser"] = (config.COOKIES_FROM_BROWSER,)
-    elif config.COOKIES_FILE:
-        opts["cookiefile"] = config.COOKIES_FILE
+    opts.update(config.get_ytdlp_auth_opts())
     return opts
 
 

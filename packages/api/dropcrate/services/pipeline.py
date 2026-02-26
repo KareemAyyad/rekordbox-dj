@@ -30,32 +30,46 @@ MAX_CONCURRENT = 3
 
 
 async def _maybe_generate_rekordbox_xml(job: Job, inbox_dir: Path) -> None:
-    """Generate rekordbox XML after a batch if the setting is enabled."""
+    """Generate rekordbox XML after a batch if the setting is enabled.
+
+    Uses the full library (not just the current batch) and writes into a
+    timestamped folder like ``DropCrate 2026-02-26/dropcrate_import.xml``.
+    """
     if not job.completed_ids:
         return
     try:
         from dropcrate.services.rekordbox_xml import generate_rekordbox_xml
 
-        # Check if the setting is enabled
         db = await get_db()
         row = await db.execute_fetchall("SELECT rekordbox_xml_enabled FROM settings WHERE id = 1")
         if not row or not row[0]["rekordbox_xml_enabled"]:
             return
 
-        # Fetch all completed tracks from this batch
-        placeholders = ",".join("?" for _ in job.completed_ids)
+        # Use FULL library, not just batch tracks
         tracks = await db.execute_fetchall(
-            f"SELECT * FROM library_tracks WHERE id IN ({placeholders})",
-            tuple(job.completed_ids),
+            "SELECT * FROM library_tracks ORDER BY downloaded_at DESC"
         )
         if not tracks:
             return
 
         track_dicts = [dict(t) for t in tracks]
-        xml_path = inbox_dir / "dropcrate_import.xml"
+
+        # Timestamped folder: DropCrate YYYY-MM-DD
+        folder_name = f"DropCrate {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+        xml_dir = inbox_dir / folder_name
+        xml_dir.mkdir(parents=True, exist_ok=True)
+        xml_path = xml_dir / "dropcrate_import.xml"
         generate_rekordbox_xml(track_dicts, xml_path)
-    except Exception:
-        pass  # Non-fatal — XML generation failure should not break the pipeline
+    except Exception as exc:
+        import logging
+        logging.getLogger("dropcrate.pipeline").warning(
+            "Rekordbox XML generation failed: %s", exc
+        )
+        job_manager.broadcast(job, {
+            "type": "warning",
+            "job_id": job.id,
+            "message": f"Rekordbox XML generation failed: {exc}",
+        })
 
 
 async def run_pipeline(job: Job, req: QueueStartRequest) -> None:

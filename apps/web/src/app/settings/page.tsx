@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -33,9 +33,85 @@ export default function SettingsPage() {
 
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // YouTube Auth state
+  const [authStatus, setAuthStatus] = useState<{ authenticated: boolean; method: string } | null>(null);
+  const [authFlow, setAuthFlow] = useState<{
+    userCode: string;
+    verificationUrl: string;
+    deviceCode: string;
+    interval: number;
+    expiresAt: number;
+  } | null>(null);
+  const [authStarting, setAuthStarting] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showCookiesFallback, setShowCookiesFallback] = useState(false);
+  const [cookiesUploading, setCookiesUploading] = useState(false);
+
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => {});
+    api.getYoutubeAuthStatus().then(setAuthStatus).catch(() => {});
   }, [setSettings]);
+
+  // Poll for OAuth2 token when auth flow is active
+  useEffect(() => {
+    if (!authFlow) return;
+
+    pollingRef.current = setInterval(async () => {
+      if (Date.now() > authFlow.expiresAt) {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        setAuthFlow(null);
+        toast.error("Authorization timed out. Try again.");
+        return;
+      }
+      try {
+        const result = await api.pollYoutubeAuth(authFlow.deviceCode);
+        if (result.status === "authorized") {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setAuthFlow(null);
+          setAuthStatus({ authenticated: true, method: "oauth2" });
+          toast.success("YouTube account connected!");
+        } else if (result.status === "denied" || result.status === "expired" || result.status === "error") {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setAuthFlow(null);
+          toast.error(result.error || "Authorization failed");
+        }
+      } catch {
+        // Network error — keep polling
+      }
+    }, (authFlow.interval || 5) * 1000);
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [authFlow]);
+
+  const startYoutubeAuth = useCallback(async () => {
+    setAuthStarting(true);
+    try {
+      const data = await api.startYoutubeAuth();
+      setAuthFlow({
+        userCode: data.user_code,
+        verificationUrl: data.verification_url,
+        deviceCode: data.device_code,
+        interval: data.interval,
+        expiresAt: Date.now() + data.expires_in * 1000,
+      });
+    } catch {
+      toast.error("Failed to start YouTube sign-in");
+    } finally {
+      setAuthStarting(false);
+    }
+  }, []);
+
+  const revokeYoutubeAuth = useCallback(async () => {
+    try {
+      await api.revokeYoutubeAuth();
+      setAuthStatus({ authenticated: false, method: "none" });
+      toast.success("YouTube account disconnected");
+    } catch {
+      toast.error("Failed to disconnect");
+    }
+  }, []);
 
   const activePreset = detectPreset(settings);
 
@@ -267,6 +343,173 @@ export default function SettingsPage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* YouTube Authentication */}
+      <div className="mt-8 space-y-4">
+        <h2 className="text-sm font-semibold text-[var(--dc-text)]">YouTube Authentication</h2>
+        <div className="rounded-2xl border border-[color:var(--dc-border)] bg-[var(--dc-card2)] p-5 space-y-4">
+          {/* Status indicator */}
+          <div className="flex items-center gap-2">
+            <div
+              className={clsx(
+                "h-2.5 w-2.5 rounded-full",
+                authStatus?.authenticated ? "bg-green-500" : "bg-red-500"
+              )}
+            />
+            <span className="text-sm text-[var(--dc-text)]">
+              {authStatus?.authenticated
+                ? authStatus.method === "oauth2"
+                  ? "Signed in with YouTube"
+                  : "Authenticated via cookies"
+                : "Not connected"}
+            </span>
+          </div>
+
+          {/* Active auth flow — show user code */}
+          {authFlow && (
+            <div className="dc-animate-fadeIn rounded-xl border border-[color:var(--dc-accent-border)] bg-[var(--dc-accent-bg)] p-4 space-y-3">
+              <p className="text-sm font-medium text-[var(--dc-text)]">
+                Go to the link below and enter this code:
+              </p>
+              <div className="flex items-center justify-center">
+                <span className="rounded-lg bg-[var(--dc-card)] px-6 py-3 text-2xl font-mono font-bold tracking-widest text-[var(--dc-accent)]">
+                  {authFlow.userCode}
+                </span>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <a
+                  href={authFlow.verificationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-[var(--dc-accent)] underline hover:opacity-80"
+                >
+                  {authFlow.verificationUrl}
+                </a>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(authFlow.userCode);
+                    toast.success("Code copied!");
+                  }}
+                  className="rounded-lg bg-[var(--dc-chip)] px-2 py-1 text-[10px] font-medium text-[var(--dc-muted)] hover:bg-[var(--dc-chip-strong)] transition"
+                >
+                  Copy code
+                </button>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <svg className="h-3.5 w-3.5 dc-animate-spin text-[var(--dc-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span className="text-xs text-[var(--dc-muted)]">Waiting for authorization...</span>
+              </div>
+              <div className="flex justify-center">
+                <button
+                  onClick={() => {
+                    if (pollingRef.current) clearInterval(pollingRef.current);
+                    setAuthFlow(null);
+                  }}
+                  className="text-xs text-[var(--dc-muted)] hover:text-[var(--dc-danger-text)] transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Not authenticated — show sign in button */}
+          {!authStatus?.authenticated && !authFlow && (
+            <>
+              <p className="text-xs text-[var(--dc-muted)]">
+                Sign in with your YouTube/Google account to enable downloading.
+                You&apos;ll be given a code to enter at google.com/device.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={startYoutubeAuth}
+                  disabled={authStarting}
+                  className={clsx(
+                    "flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white transition",
+                    authStarting
+                      ? "bg-[var(--dc-accent)] opacity-60 cursor-not-allowed"
+                      : "bg-[var(--dc-accent)] hover:opacity-90"
+                  )}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21.582 6.186a2.506 2.506 0 00-1.768-1.768C18.254 4 12 4 12 4s-6.254 0-7.814.418c-.86.23-1.538.908-1.768 1.768C2 7.746 2 12 2 12s0 4.254.418 5.814c.23.86.908 1.538 1.768 1.768C5.746 20 12 20 12 20s6.254 0 7.814-.418a2.504 2.504 0 001.768-1.768C22 16.254 22 12 22 12s0-4.254-.418-5.814zM10 15.464V8.536L16 12l-6 3.464z" />
+                  </svg>
+                  {authStarting ? "Starting..." : "Sign in with YouTube"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Authenticated — show disconnect */}
+          {authStatus?.authenticated && !authFlow && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={revokeYoutubeAuth}
+                className="rounded-xl border border-[color:var(--dc-danger-border)] px-4 py-2 text-xs font-medium text-[var(--dc-danger-text)] hover:bg-[var(--dc-danger-bg)] transition"
+              >
+                Disconnect YouTube
+              </button>
+            </div>
+          )}
+
+          {/* Cookies fallback */}
+          {!authStatus?.authenticated && !authFlow && (
+            <div className="border-t border-[color:var(--dc-border)] pt-3 mt-3">
+              <button
+                onClick={() => setShowCookiesFallback(!showCookiesFallback)}
+                className="text-[11px] text-[var(--dc-muted2)] hover:text-[var(--dc-muted)] transition"
+              >
+                {showCookiesFallback ? "Hide" : "Alternative: Upload cookies.txt"}
+              </button>
+              {showCookiesFallback && (
+                <div className="dc-animate-fadeIn mt-3 space-y-2">
+                  <p className="text-xs text-[var(--dc-muted)]">
+                    Export cookies using a browser extension and upload the file.
+                  </p>
+                  <label
+                    className={clsx(
+                      "inline-block cursor-pointer rounded-xl px-4 py-2 text-xs font-medium text-white transition",
+                      cookiesUploading
+                        ? "bg-[var(--dc-chip)] opacity-60 cursor-not-allowed"
+                        : "bg-[var(--dc-chip-strong)] hover:opacity-90"
+                    )}
+                  >
+                    {cookiesUploading ? "Uploading..." : "Upload cookies.txt"}
+                    <input
+                      type="file"
+                      accept=".txt"
+                      className="hidden"
+                      disabled={cookiesUploading}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setCookiesUploading(true);
+                        try {
+                          const result = await api.uploadYoutubeCookies(file);
+                          if (result.ok) {
+                            toast.success("Cookies uploaded");
+                            const status = await api.getYoutubeAuthStatus();
+                            setAuthStatus(status);
+                          } else {
+                            toast.error(result.error || "Upload failed");
+                          }
+                        } catch {
+                          toast.error("Failed to upload cookies");
+                        } finally {
+                          setCookiesUploading(false);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Rekordbox Integration */}

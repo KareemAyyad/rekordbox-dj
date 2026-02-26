@@ -11,6 +11,7 @@ Format spec: https://cdn.rekordbox.com/files/20200410160904/xml_format_list.pdf
 from __future__ import annotations
 
 import os
+import re
 from collections import defaultdict
 from pathlib import Path
 from urllib.parse import quote
@@ -23,6 +24,24 @@ KIND_MAP = {
     "wav": "WAV Audio File",
     "flac": "FLAC Audio File",
     "mp3": "MP3 Audio File",
+}
+
+# Maps energy fraction to human-readable name for playlists.
+ENERGY_LABEL = {
+    "1/5": "Low",
+    "2/5": "Medium-Low",
+    "3/5": "Medium",
+    "4/5": "High",
+    "5/5": "Very High",
+}
+
+# Maps energy fraction to rekordbox Rating (0-255 scale, 51 per star).
+ENERGY_RATING = {
+    "1/5": "51",
+    "2/5": "102",
+    "3/5": "153",
+    "4/5": "204",
+    "5/5": "255",
 }
 
 
@@ -50,6 +69,14 @@ def _date_only(iso_timestamp: str | None) -> str:
     if not iso_timestamp:
         return ""
     return iso_timestamp[:10]
+
+
+def _year_only(value: str | None) -> str:
+    """Extract a 4-digit year from a date or year string."""
+    if not value:
+        return ""
+    m = re.search(r"\b(\d{4})\b", value)
+    return m.group(1) if m else ""
 
 
 def _safe_int(value, default: int = 0) -> str:
@@ -89,13 +116,15 @@ def generate_rekordbox_xml(tracks: list[dict], output_path: Path) -> Path:
         dc_id = t.get("id", str(idx))
         track_ids[dc_id] = idx
 
+        energy = (t.get("energy") or "").strip()
+
         attrs: dict[str, str] = {
             "TrackID": str(idx),
             "Name": t.get("title", "") or "Untitled",
             "Artist": t.get("artist", "") or "Unknown",
             "Genre": t.get("genre", "") or "",
             "Location": _file_uri(file_path),
-            "Rating": "0",
+            "Rating": ENERGY_RATING.get(energy, "0"),
         }
 
         # Optional fields — only include if present
@@ -116,33 +145,32 @@ def generate_rekordbox_xml(tracks: list[dict], output_path: Path) -> Path:
         if time_slot:
             attrs["Grouping"] = time_slot
 
-        # Comment block with DJ tags
-        comment_lines: list[str] = []
-        energy = (t.get("energy") or "").strip()
+        # Single-line pipe-separated comment with DJ tags
+        comment_parts: list[str] = []
         vibe = (t.get("vibe") or "").strip()
         if energy:
-            comment_lines.append(f"ENERGY: {energy}")
+            comment_parts.append(f"ENERGY: {energy}")
         if time_slot:
-            comment_lines.append(f"TIME: {time_slot}")
+            comment_parts.append(f"TIME: {time_slot}")
         if vibe:
-            comment_lines.append(f"VIBE: {vibe}")
+            comment_parts.append(f"VIBE: {vibe}")
         source_url = t.get("source_url") or ""
         source_id = t.get("source_id") or ""
         if source_url:
-            comment_lines.append(f"SOURCE: YouTube")
-            comment_lines.append(f"URL: {source_url}")
+            comment_parts.append(f"SOURCE: YouTube")
+            comment_parts.append(f"URL: {source_url}")
         if source_id:
-            comment_lines.append(f"YOUTUBE_ID: {source_id}")
-        if comment_lines:
-            attrs["Comments"] = "\n".join(comment_lines)
+            comment_parts.append(f"YOUTUBE_ID: {source_id}")
+        if comment_parts:
+            attrs["Comments"] = " | ".join(comment_parts)
 
         album = (t.get("album") or "").strip()
         if album:
             attrs["Album"] = album
 
-        year = (t.get("year") or "").strip() if t.get("year") else ""
-        if year:
-            attrs["Year"] = _safe_int(year)
+        year_str = _year_only(t.get("year"))
+        if year_str:
+            attrs["Year"] = year_str
 
         label = (t.get("label") or "").strip()
         if label:
@@ -183,7 +211,8 @@ def generate_rekordbox_xml(tracks: list[dict], output_path: Path) -> Path:
 
         energy = (t.get("energy") or "").strip()
         if energy:
-            by_energy[energy].append(tid)
+            label = ENERGY_LABEL.get(energy, energy)
+            by_energy[label].append(tid)
 
     def _add_playlist_group(parent: Element, name: str, groups: dict[str, list[int]]) -> None:
         if not groups:
@@ -212,6 +241,9 @@ def generate_rekordbox_xml(tracks: list[dict], output_path: Path) -> Path:
 
     tree = ElementTree(root)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    tree.write(str(output_path), encoding="UTF-8", xml_declaration=True)
+    # Write XML declaration manually with double quotes (rekordbox compat)
+    with open(output_path, "wb") as f:
+        f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
+        tree.write(f, encoding="UTF-8", xml_declaration=False)
 
     return output_path

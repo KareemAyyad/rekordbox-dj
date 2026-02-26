@@ -54,22 +54,22 @@ def _build_tags(
     source_id: str = "",
 ) -> dict[str, str]:
     """Build tag dict matching the current TypeScript implementation."""
-    comment_lines: list[str] = []
+    comment_parts: list[str] = []
     if energy.strip():
-        comment_lines.append(f"ENERGY: {energy.strip()}")
+        comment_parts.append(f"ENERGY: {energy.strip()}")
     if time_slot.strip():
-        comment_lines.append(f"TIME: {time_slot.strip()}")
+        comment_parts.append(f"TIME: {time_slot.strip()}")
     if vibe.strip():
-        comment_lines.append(f"VIBE: {vibe.strip()}")
-    comment_lines.append(f"SOURCE: YouTube")
-    comment_lines.append(f"URL: {source_url}")
-    comment_lines.append(f"YOUTUBE_ID: {source_id}")
+        comment_parts.append(f"VIBE: {vibe.strip()}")
+    comment_parts.append(f"SOURCE: YouTube")
+    comment_parts.append(f"URL: {source_url}")
+    comment_parts.append(f"YOUTUBE_ID: {source_id}")
 
     tags: dict[str, str] = {
         "artist": artist,
         "title": title,
         "genre": genre,
-        "comment": "\n".join(comment_lines),
+        "comment": " | ".join(comment_parts),
     }
     # Grouping tag — rekordbox displays this in its Grouping column
     if time_slot.strip():
