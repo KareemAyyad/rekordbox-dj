@@ -287,6 +287,15 @@ class SAMAudioService:
                 self._runpod = RunPodBackend()
             return self._runpod
         else:
+            # Check if torch is available before trying local
+            try:
+                import torch  # noqa: F401
+            except ImportError:
+                raise RuntimeError(
+                    "No GPU backend available. Set RUNPOD_API_KEY and "
+                    "RUNPOD_ENDPOINT_ID environment variables for cloud inference, "
+                    "or install PyTorch for local inference."
+                )
             if self._local is None:
                 self._local = LocalBackend()
             return self._local
