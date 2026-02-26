@@ -1,0 +1,15 @@
+{
+  "name": "dropcrate",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev:web": "pnpm --filter @dropcrate/web dev",
+    "dev:api": "cd packages/api && uvicorn dropcrate.main:app --reload --port 8000",
+    "build:web": "pnpm --filter @dropcrate/web build",
+    "lint": "pnpm --filter @dropcrate/web lint",
+    "typecheck": "pnpm --filter @dropcrate/web typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

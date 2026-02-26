@@ -1,0 +1,312 @@
+"""Pipeline orchestrator — port of downloadBatch + downloadOne.
+
+Processes a queue of YouTube URLs through the full audio pipeline:
+metadata → classify → download → fingerprint → normalize → tag → finalize
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import re
+import shutil
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+from dropcrate import config
+from dropcrate.database import get_db
+from dropcrate.models.schemas import QueueStartRequest
+from dropcrate.services import download, fingerprint, normalize, tagger, transcode
+from dropcrate.services.classify_heuristic import heuristic_classify
+from dropcrate.services.job_manager import Job, job_manager
+from dropcrate.services.naming import make_rekordbox_filename, sanitize_file_component
+from dropcrate.services.title_parser import normalize_from_youtube_title
+from dropcrate.services.metadata import fetch_video_info
+
+
+MAX_CONCURRENT = 3
+
+
+async def run_pipeline(job: Job, req: QueueStartRequest) -> None:
+    """Main pipeline entry point. Runs as a background task."""
+    inbox_dir = Path(req.inbox_dir)
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+
+    job_manager.broadcast(job, {
+        "type": "queue-start",
+        "job_id": job.id,
+        "count": len(req.items),
+        "inbox_dir": str(inbox_dir),
+        "mode": req.mode.value,
+    })
+
+    sem = asyncio.Semaphore(MAX_CONCURRENT)
+    tasks = []
+    for item in req.items:
+        tasks.append(_process_with_semaphore(sem, job, req, item, inbox_dir))
+
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    job_manager.broadcast(job, {"type": "queue-done", "job_id": job.id})
+
+
+async def _process_with_semaphore(sem, job, req, item, inbox_dir):
+    async with sem:
+        if job.cancel_requested:
+            job_manager.broadcast(job, {
+                "type": "item-error",
+                "job_id": job.id,
+                "item_id": item.id,
+                "url": item.url,
+                "error": "Cancelled",
+            })
+            return
+        await _process_one(job, req, item, inbox_dir)
+
+
+async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) -> None:
+    """Process a single queue item through the full pipeline."""
+    url = item.url
+    dj_defaults = item.preset_snapshot
+
+    job_manager.broadcast(job, {
+        "type": "item-start", "job_id": job.id, "item_id": item.id, "url": url
+    })
+
+    def progress(stage: str):
+        if not job.cancel_requested:
+            job_manager.broadcast(job, {
+                "type": "item-progress",
+                "job_id": job.id,
+                "item_id": item.id,
+                "url": url,
+                "stage": stage,
+            })
+
+    try:
+        # Stage 1: Metadata
+        progress("metadata")
+        info = await fetch_video_info(url)
+        source_url = info.get("webpage_url") or url
+        source_id = info.get("id") or hashlib.sha1(source_url.encode()).hexdigest()[:10]
+
+        if job.cancel_requested:
+            raise RuntimeError("Cancelled")
+
+        # Stage 2: Classify
+        progress("classify")
+        classification = heuristic_classify(item.id, info)
+        effective_genre = (
+            dj_defaults.genre
+            if dj_defaults.genre and dj_defaults.genre != "Other"
+            else (classification.genre or "Other")
+        )
+        effective_energy = dj_defaults.energy or (classification.energy or "")
+        effective_time = dj_defaults.time or (classification.time or "")
+        effective_vibe = dj_defaults.vibe or (classification.vibe or "")
+
+        # Parse title
+        raw_title = (info.get("title") or "Unknown Title").strip()
+        title_had_separator = bool(re.search(r"(\s-\s|\s\u2013\s|\s\u2014\s|\s\|\s)", raw_title))
+        normalized = normalize_from_youtube_title(raw_title, info.get("uploader"))
+
+        base_name = sanitize_file_component(f"{normalized.artist} - {normalized.title}".strip())
+        work_dir = inbox_dir / f".dropcrate_tmp_{source_id}"
+        work_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            if job.cancel_requested:
+                raise RuntimeError("Cancelled")
+
+            # Stage 3: Download
+            progress("download")
+            downloaded_path = await download.download_audio(url, work_dir)
+            downloaded_ext = downloaded_path.suffix.lower()
+
+            # Download thumbnail
+            thumb_url = tagger.pick_best_thumbnail_url(info)
+            thumb_path = None
+            if thumb_url:
+                thumb_path = await tagger.download_thumbnail(thumb_url, work_dir / "cover.jpg")
+
+            if job.cancel_requested:
+                raise RuntimeError("Cancelled")
+
+            # Stage 4: Fingerprint
+            progress("fingerprint")
+            matched = await fingerprint.try_match_music_metadata(
+                audio_path=downloaded_path,
+                fallback_artist=normalized.artist,
+                fallback_title=normalized.title,
+                fallback_version=normalized.version,
+                title_had_separator=title_had_separator,
+            )
+
+            if matched:
+                effective_artist = matched.artist
+                effective_title = matched.title
+                effective_version = matched.version
+                effective_album = matched.album
+                effective_year = matched.year
+                effective_label = matched.label
+            else:
+                effective_artist = normalized.artist
+                effective_title = normalized.title
+                effective_version = normalized.version
+                effective_album = None
+                effective_year = None
+                effective_label = None
+
+            # Build tags
+            tags = tagger._build_tags(
+                artist=effective_artist,
+                title=effective_title,
+                genre=effective_genre,
+                energy=effective_energy,
+                time_slot=effective_time,
+                vibe=effective_vibe,
+                album=effective_album,
+                year=effective_year,
+                label=effective_label,
+                source_url=source_url,
+                source_id=source_id,
+            )
+
+            if job.cancel_requested:
+                raise RuntimeError("Cancelled")
+
+            # Determine output format and extension
+            audio_format = req.audio_format.value
+            ext_map = {"aiff": ".aiff", "wav": ".wav", "flac": ".flac", "mp3": ".mp3"}
+            final_ext = ext_map.get(audio_format, ".aiff")
+
+            final_filename = make_rekordbox_filename(
+                artist=tags.get("artist", "Unknown"),
+                title=tags.get("title", "Unknown"),
+                ext=final_ext,
+            )
+            final_path = inbox_dir / final_filename
+
+            # Stage 5: Normalize or Transcode
+            if req.normalize_enabled and req.mode.value == "dj-safe":
+                progress("normalize")
+                tmp_path = work_dir / f"output{final_ext}"
+                await normalize.loudnorm_two_pass(
+                    input_path=downloaded_path,
+                    output_path=tmp_path,
+                    audio_format=audio_format,
+                    target_i=req.loudness.target_i,
+                    target_tp=req.loudness.target_tp,
+                    target_lra=req.loudness.target_lra,
+                )
+                shutil.move(str(tmp_path), str(final_path))
+            else:
+                progress("transcode")
+                # Check if we can just rename (same format, no normalization)
+                is_same_format = (
+                    (downloaded_ext == ".m4a" and audio_format == "mp3")
+                    or downloaded_ext == final_ext
+                )
+                if not req.normalize_enabled and is_same_format and downloaded_ext == final_ext:
+                    shutil.move(str(downloaded_path), str(final_path))
+                else:
+                    tmp_path = work_dir / f"output{final_ext}"
+                    await transcode.transcode(downloaded_path, tmp_path, audio_format)
+                    shutil.move(str(tmp_path), str(final_path))
+
+            # Stage 6: Tag
+            progress("tag")
+            await tagger.apply_tags_and_artwork(
+                media_path=final_path,
+                ext=final_ext,
+                tags=tags,
+                artwork_path=thumb_path,
+            )
+
+            # Stage 7: Finalize
+            progress("finalize")
+
+            # Write sidecar JSON
+            sidecar = {
+                "sourceUrl": source_url,
+                "sourceId": source_id,
+                "title": info.get("title"),
+                "uploader": info.get("uploader"),
+                "duration": info.get("duration"),
+                "downloadedAt": datetime.now(timezone.utc).isoformat(),
+                "normalized": {
+                    "artist": effective_artist,
+                    "title": effective_title,
+                    "version": effective_version,
+                    "album": effective_album,
+                    "year": effective_year,
+                    "label": effective_label,
+                },
+                "djDefaults": {
+                    "genre": effective_genre,
+                    "energy": effective_energy,
+                    "time": effective_time,
+                    "vibe": effective_vibe,
+                },
+                "processing": {
+                    "audioFormat": audio_format,
+                    "normalize": {
+                        "enabled": req.normalize_enabled,
+                        "targetI": req.loudness.target_i,
+                        "targetTP": req.loudness.target_tp,
+                        "targetLRA": req.loudness.target_lra,
+                    },
+                },
+                "outputs": {"audioPath": str(final_path)},
+            }
+            sidecar_name = sanitize_file_component(
+                f"{effective_artist} - {effective_title}".strip()
+            )
+            sidecar_path = inbox_dir / f"{sidecar_name}.dropcrate.json"
+            sidecar_path.write_text(json.dumps(sidecar, indent=2))
+
+            # Insert into library database
+            track_id = str(uuid.uuid4())[:8]
+            db = await get_db()
+            await db.execute(
+                """INSERT OR REPLACE INTO library_tracks
+                   (id, file_path, sidecar_path, artist, title, genre, energy, time_slot, vibe,
+                    source_url, source_id, duration_seconds, audio_format, downloaded_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    track_id,
+                    str(final_path),
+                    str(sidecar_path),
+                    effective_artist,
+                    effective_title,
+                    effective_genre,
+                    effective_energy,
+                    effective_time,
+                    effective_vibe,
+                    source_url,
+                    source_id,
+                    info.get("duration"),
+                    audio_format,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            await db.commit()
+
+            job_manager.broadcast(job, {
+                "type": "item-done", "job_id": job.id, "item_id": item.id, "url": url
+            })
+
+        finally:
+            # Clean up work directory
+            shutil.rmtree(str(work_dir), ignore_errors=True)
+
+    except Exception as e:
+        job_manager.broadcast(job, {
+            "type": "item-error",
+            "job_id": job.id,
+            "item_id": item.id,
+            "url": url,
+            "error": str(e),
+        })
