@@ -24,6 +24,7 @@ async def _load_settings() -> Settings:
             target_tp=r["target_tp"],
             target_lra=r["target_lra"],
         ),
+        rekordbox_xml_enabled=bool(r["rekordbox_xml_enabled"]),
     )
 
 
@@ -46,6 +47,7 @@ async def update_settings(update: SettingsUpdate):
         """UPDATE settings SET
             inbox_dir = ?, mode = ?, audio_format = ?,
             normalize_enabled = ?, target_i = ?, target_tp = ?, target_lra = ?,
+            rekordbox_xml_enabled = ?,
             updated_at = datetime('now')
         WHERE id = 1""",
         (
@@ -56,6 +58,7 @@ async def update_settings(update: SettingsUpdate):
             merged.loudness.target_i,
             merged.loudness.target_tp,
             merged.loudness.target_lra,
+            int(merged.rekordbox_xml_enabled),
         ),
     )
     await db.commit()

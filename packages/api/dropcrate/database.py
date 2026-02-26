@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS settings (
     target_i REAL NOT NULL DEFAULT -14.0,
     target_tp REAL NOT NULL DEFAULT -1.0,
     target_lra REAL NOT NULL DEFAULT 11.0,
+    rekordbox_xml_enabled INTEGER NOT NULL DEFAULT 1,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -35,6 +36,9 @@ CREATE TABLE IF NOT EXISTS library_tracks (
     source_id TEXT,
     duration_seconds REAL,
     audio_format TEXT,
+    album TEXT,
+    year TEXT,
+    label TEXT,
     downloaded_at TEXT NOT NULL DEFAULT (datetime('now')),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

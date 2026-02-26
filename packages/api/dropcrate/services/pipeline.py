@@ -29,6 +29,35 @@ from dropcrate.services.metadata import fetch_video_info
 MAX_CONCURRENT = 3
 
 
+async def _maybe_generate_rekordbox_xml(job: Job, inbox_dir: Path) -> None:
+    """Generate rekordbox XML after a batch if the setting is enabled."""
+    if not job.completed_ids:
+        return
+    try:
+        from dropcrate.services.rekordbox_xml import generate_rekordbox_xml
+
+        # Check if the setting is enabled
+        db = await get_db()
+        row = await db.execute_fetchall("SELECT rekordbox_xml_enabled FROM settings WHERE id = 1")
+        if not row or not row[0]["rekordbox_xml_enabled"]:
+            return
+
+        # Fetch all completed tracks from this batch
+        placeholders = ",".join("?" for _ in job.completed_ids)
+        tracks = await db.execute_fetchall(
+            f"SELECT * FROM library_tracks WHERE id IN ({placeholders})",
+            tuple(job.completed_ids),
+        )
+        if not tracks:
+            return
+
+        track_dicts = [dict(t) for t in tracks]
+        xml_path = inbox_dir / "dropcrate_import.xml"
+        generate_rekordbox_xml(track_dicts, xml_path)
+    except Exception:
+        pass  # Non-fatal — XML generation failure should not break the pipeline
+
+
 async def run_pipeline(job: Job, req: QueueStartRequest) -> None:
     """Main pipeline entry point. Runs as a background task."""
     inbox_dir = Path(req.inbox_dir)
@@ -48,6 +77,9 @@ async def run_pipeline(job: Job, req: QueueStartRequest) -> None:
         tasks.append(_process_with_semaphore(sem, job, req, item, inbox_dir))
 
     await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Generate rekordbox XML with auto-playlists for completed tracks
+    await _maybe_generate_rekordbox_xml(job, inbox_dir)
 
     job_manager.broadcast(job, {"type": "queue-done", "job_id": job.id})
 
@@ -273,8 +305,9 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
             await db.execute(
                 """INSERT OR REPLACE INTO library_tracks
                    (id, file_path, sidecar_path, artist, title, genre, energy, time_slot, vibe,
-                    source_url, source_id, duration_seconds, audio_format, downloaded_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    source_url, source_id, duration_seconds, audio_format,
+                    album, year, label, downloaded_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     track_id,
                     str(final_path),
@@ -289,10 +322,16 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
                     source_id,
                     info.get("duration"),
                     audio_format,
+                    effective_album or None,
+                    effective_year or None,
+                    effective_label or None,
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )
             await db.commit()
+
+            # Track completed IDs for batch XML generation
+            job.completed_ids.append(track_id)
 
             job_manager.broadcast(job, {
                 "type": "item-done", "job_id": job.id, "item_id": item.id, "url": url

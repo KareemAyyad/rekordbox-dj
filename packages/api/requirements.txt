@@ -7,3 +7,11 @@ openai>=1.50.0
 httpx>=0.27.0
 python-dotenv>=1.0.0
 python-multipart>=0.0.12
+
+# SAM-Audio — soundfile is always needed; torch/torchaudio only for local mode
+soundfile>=0.12.0
+
+# Local inference (optional — install if not using RunPod)
+# torch>=2.1.0
+# torchaudio>=2.1.0
+# sam-audio-infer>=0.1.0

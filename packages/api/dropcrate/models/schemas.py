@@ -78,6 +78,7 @@ class Settings(BaseModel):
     audio_format: AudioFormat = AudioFormat.AIFF
     normalize_enabled: bool = True
     loudness: LoudnessConfig = Field(default_factory=LoudnessConfig)
+    rekordbox_xml_enabled: bool = True
 
 
 class SettingsUpdate(BaseModel):
@@ -86,6 +87,7 @@ class SettingsUpdate(BaseModel):
     audio_format: Optional[AudioFormat] = None
     normalize_enabled: Optional[bool] = None
     loudness: Optional[LoudnessConfig] = None
+    rekordbox_xml_enabled: Optional[bool] = None
 
 
 # --- Queue ---

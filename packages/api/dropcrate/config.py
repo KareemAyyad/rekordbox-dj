@@ -31,5 +31,14 @@ FPCALC_PATH = _env("DROPCRATE_FPCALC_PATH", "fpcalc")
 COOKIES_FROM_BROWSER = _env("DROPCRATE_COOKIES_FROM_BROWSER")
 COOKIES_FILE = _env("DROPCRATE_COOKIES_FILE")
 
+# SAM-Audio
+SEGMENTS_DIR = Path(_env("DROPCRATE_SEGMENTS_DIR", "./data/segments"))
+HF_TOKEN = _env("HF_TOKEN")
+SAM_AUDIO_MODEL = _env("SAM_AUDIO_MODEL", "facebook/sam-audio-base")
+
+# RunPod (optional — set both to use cloud GPU instead of local inference)
+RUNPOD_API_KEY = _env("RUNPOD_API_KEY")
+RUNPOD_ENDPOINT_ID = _env("RUNPOD_ENDPOINT_ID")
+
 # Static files (Next.js build output served in production)
 STATIC_DIR = Path(_env("DROPCRATE_STATIC_DIR", "./static"))

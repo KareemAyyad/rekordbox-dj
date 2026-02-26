@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from dropcrate import config, database
-from dropcrate.routers import classify, events, health, library, queue, settings
+from dropcrate.routers import classify, events, health, library, queue, segment, settings
 from dropcrate.services.job_manager import job_manager  # noqa: F401
 
 
@@ -15,6 +15,7 @@ from dropcrate.services.job_manager import job_manager  # noqa: F401
 async def lifespan(app: FastAPI):
     # Startup
     config.INBOX_DIR.mkdir(parents=True, exist_ok=True)
+    config.SEGMENTS_DIR.mkdir(parents=True, exist_ok=True)
     await database.get_db()
     yield
     # Shutdown
@@ -39,6 +40,7 @@ app.include_router(classify.router)
 app.include_router(queue.router)
 app.include_router(events.router)
 app.include_router(library.router)
+app.include_router(segment.router)
 
 # Serve Next.js static build in production
 if config.STATIC_DIR.exists():

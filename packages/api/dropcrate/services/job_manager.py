@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 class Job:
     id: str
     cancel_requested: bool = False
+    completed_ids: list[str] = field(default_factory=list)
     history: list[dict] = field(default_factory=list)
     subscribers: dict[str, asyncio.Queue] = field(default_factory=dict)
 

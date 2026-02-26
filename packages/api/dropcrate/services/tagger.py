@@ -71,6 +71,9 @@ def _build_tags(
         "genre": genre,
         "comment": "\n".join(comment_lines),
     }
+    # Grouping tag — rekordbox displays this in its Grouping column
+    if time_slot.strip():
+        tags["grouping"] = time_slot.strip()
     if album and album.strip():
         tags["album"] = album.strip()
     if year and year.strip():

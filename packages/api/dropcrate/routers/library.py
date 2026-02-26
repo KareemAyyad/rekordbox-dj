@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
@@ -7,6 +8,7 @@ from fastapi.responses import FileResponse
 
 from dropcrate.database import get_db
 from dropcrate.models.schemas import LibraryItem
+from dropcrate.services.rekordbox_xml import generate_rekordbox_xml
 
 router = APIRouter()
 
@@ -54,6 +56,29 @@ async def list_library(
         )
         for row in rows
     ]
+
+
+@router.get("/api/library/rekordbox-xml")
+async def export_rekordbox_xml():
+    """Generate and return rekordbox XML for the entire library."""
+    db = await get_db()
+    rows = await db.execute_fetchall(
+        "SELECT * FROM library_tracks ORDER BY downloaded_at DESC"
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="No tracks in library")
+
+    tracks = [dict(row) for row in rows]
+
+    tmp_dir = Path(tempfile.mkdtemp())
+    xml_path = tmp_dir / "dropcrate_import.xml"
+    generate_rekordbox_xml(tracks, xml_path)
+
+    return FileResponse(
+        path=str(xml_path),
+        filename="dropcrate_import.xml",
+        media_type="application/xml",
+    )
 
 
 @router.get("/api/library/{track_id}/download")
