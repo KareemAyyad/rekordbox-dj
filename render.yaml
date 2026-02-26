@@ -1,12 +1,11 @@
 services:
   - type: web
-    name: hoover-web
+    name: dropcrate-web
     env: docker
     plan: starter
     region: ohio
-    dockerContext: rekordbox
-    dockerfilePath: rekordbox/Dockerfile
-    healthCheckPath: /health
+    dockerfilePath: docker/Dockerfile
+    healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: 10000
@@ -14,9 +13,9 @@ services:
         sync: false
       - key: DROPCRATE_INBOX_DIR
         value: /data/inbox
-      - key: NODE_ENV
-        value: production
+      - key: DROPCRATE_DATABASE_PATH
+        value: /data/dropcrate.db
     disk:
-      name: hoover-storage
+      name: dropcrate-storage
       mountPath: /data
       sizeGB: 10

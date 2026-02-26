@@ -1,56 +1,38 @@
 # Dependencies
 node_modules/
-**/node_modules/
+.pnpm-store/
+__pycache__/
+*.pyc
+.venv/
+venv/
 
-# Build outputs
-dist/
-**/dist/
-build/
-**/build/
+# Build
+.next/
 out/
-**/out/
-release/
-**/release/
-.tmp/
-**/.tmp/
+dist/
+*.egg-info/
 
-# Caches and temporary files
-.npm/
-.npm-cache/
-.dropcrate/
-.electron-cache/
-.electron-builder-cache/
-.electron-user-data/
-.electron-cache-runtime/
-Library/
-**/Library/
-.DS_Store
-**/.DS_Store
+# Data
+data/
+*.db
 
-# Logs
-*.log
-**/*.log
-
-# Environment variables
+# Environment
 .env
-**/.env
+.env.local
 
-# Large binary files
-*.aiff
-**/*.aiff
-*.dmg
-**/*.dmg
-*.zip
-**/*.zip
-*.exe
-**/*.exe
-*.pkg
-**/*.pkg
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# App artifacts
-**/Electron Framework.framework/
-**/Electron.app/
+# OS
+.DS_Store
+Thumbs.db
 
-# Local data
-"DJ Library/"
-"**/DJ Library/"
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+playwright-report/
+test-results/
