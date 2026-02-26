@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:10000"
+    volumes:
+      - ../data:/data
+    env_file:
+      - ../.env
+    environment:
+      - PORT=10000
+      - DROPCRATE_INBOX_DIR=/data/inbox
+      - DROPCRATE_DATABASE_PATH=/data/dropcrate.db

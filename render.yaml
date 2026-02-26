@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: dropcrate-web
+    env: docker
+    plan: starter
+    region: ohio
+    dockerfilePath: docker/Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DROPCRATE_INBOX_DIR
+        value: /data/inbox
+      - key: DROPCRATE_DATABASE_PATH
+        value: /data/dropcrate.db
+    disk:
+      name: dropcrate-storage
+      mountPath: /data
+      sizeGB: 10
