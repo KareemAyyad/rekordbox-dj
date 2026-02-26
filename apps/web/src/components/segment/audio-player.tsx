@@ -2,6 +2,8 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import clsx from "clsx";
+import { motion, AnimatePresence } from "framer-motion";
+import { Play, Pause, Volume2, Download, Minimize2, Maximize2 } from "lucide-react";
 import { Waveform } from "./waveform";
 
 function formatTime(seconds: number): string {
@@ -110,40 +112,62 @@ export function AudioPlayer({
   }, []);
 
   return (
-    <div className={clsx(
-      "dc-animate-fadeIn rounded-2xl border border-[color:var(--dc-border)] bg-[var(--dc-card)] shadow-sm hover:shadow-md transition",
-      compact ? "p-3" : "p-4",
-    )}>
+    <motion.div
+      layout
+      className={clsx(
+        "dc-animate-fadeIn rounded-3xl border border-[var(--dc-border)] bg-[var(--dc-card)] shadow-lg hover:shadow-xl hover:border-[var(--dc-border-strong)] transition-all duration-300 backdrop-blur-xl",
+        compact ? "p-4" : "p-5"
+      )}
+    >
       <audio ref={audioRef} src={activeUrl} preload="metadata" />
 
       {/* Header: label + toggle + download */}
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <h3 className={clsx("font-semibold text-[var(--dc-text)] min-w-0 truncate", compact ? "text-xs" : "text-sm")}>
-          {label}
-          {showResidual && <span className="ml-1.5 text-[10px] font-normal text-[var(--dc-muted)]">(residual)</span>}
-        </h3>
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={clsx("h-2 w-2 rounded-full", playing ? "bg-[var(--dc-accent-light)] shadow-[0_0_8px_var(--dc-accent-light)] animate-pulse" : "bg-[var(--dc-chip-strong)]")} />
+          <h3 className={clsx("font-bold text-[var(--dc-text)] min-w-0 truncate tracking-tight", compact ? "text-xs" : "text-sm")}>
+            {label}
+          </h3>
+          {showResidual && (
+            <span className="ml-1.5 px-2 py-0.5 rounded-full bg-[var(--dc-warning-bg)] border border-[var(--dc-warning-border)] text-[10px] font-bold text-[var(--dc-warning-text)] uppercase tracking-wider">
+              Residual Layer
+            </span>
+          )}
+        </div>
+
         <div className="flex items-center gap-2 shrink-0">
           {residualUrl && (
-            <button
-              onClick={() => setShowResidual(!showResidual)}
-              className={clsx(
-                "rounded-lg px-2 py-1 text-[10px] font-medium transition",
-                showResidual
-                  ? "bg-[var(--dc-accent-bg)] text-[var(--dc-accent-text)]"
-                  : "bg-[var(--dc-chip)] text-[var(--dc-muted)] hover:bg-[var(--dc-chip-strong)]",
-              )}
-              title={showResidual ? "Listening to everything EXCEPT this sound" : "Switch to hear everything EXCEPT this sound"}
-            >
-              {showResidual ? "Target" : "Residual"}
-            </button>
+            <div className="flex items-center bg-[var(--dc-chip)] rounded-full p-0.5 border border-[var(--dc-border)]">
+              <button
+                onClick={() => setShowResidual(false)}
+                className={clsx(
+                  "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-all",
+                  !showResidual ? "bg-[var(--dc-accent)] text-white shadow-sm" : "text-[var(--dc-muted)] hover:text-[var(--dc-text)]"
+                )}
+              >
+                Target
+              </button>
+              <button
+                onClick={() => setShowResidual(true)}
+                className={clsx(
+                  "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-all",
+                  showResidual ? "bg-[var(--dc-warning)] text-yellow-950 shadow-sm" : "text-[var(--dc-muted)] hover:text-[var(--dc-text)]"
+                )}
+              >
+                Residual
+              </button>
+            </div>
           )}
-          <a
+          <motion.a
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             href={activeDownload}
             download
-            className="rounded-lg bg-[var(--dc-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition"
+            className="flex items-center justify-center h-7 w-7 rounded-full bg-[var(--dc-chip-strong)] text-[var(--dc-text)] hover:bg-[var(--dc-accent)] hover:text-white transition-colors"
+            title="Download Audio"
           >
-            Download
-          </a>
+            <Download className="w-3.5 h-3.5" />
+          </motion.a>
         </div>
       </div>
 
@@ -155,46 +179,58 @@ export function AudioPlayer({
         onSeek={seek}
       />
 
-      {/* Controls */}
-      <div className="flex items-center gap-3 mt-3">
+      {/* Controls Container */}
+      <div className="flex items-center gap-4 mt-4 bg-[var(--dc-chip)] rounded-2xl p-2 pr-4 border border-[var(--dc-border)]">
         {/* Play/Pause */}
-        <button
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.9 }}
           onClick={toggle}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--dc-accent)] text-white hover:opacity-90 transition"
-        >
-          {playing ? (
-            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="4" width="4" height="16" rx="1" />
-              <rect x="14" y="4" width="4" height="16" rx="1" />
-            </svg>
-          ) : (
-            <svg className="h-3.5 w-3.5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
+          className={clsx(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm transition-colors",
+            playing ? "bg-[var(--dc-accent)] text-white shadow-[0_0_15px_var(--dc-accent-ring)]" : "bg-white text-black hover:bg-gray-100"
           )}
-        </button>
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={playing ? "pause" : "play"}
+              initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0.5, rotate: 90 }}
+              transition={{ duration: 0.15 }}
+            >
+              {playing ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-1 fill-current" />}
+            </motion.div>
+          </AnimatePresence>
+        </motion.button>
 
-        {/* Time */}
-        <span className="text-xs font-mono text-[var(--dc-muted)] tabular-nums min-w-[70px]">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </span>
+        {/* Time Progress */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold font-mono text-[var(--dc-text)] tabular-nums min-w-[40px] text-right">
+            {formatTime(currentTime)}
+          </span>
+          <span className="text-[10px] font-bold text-[var(--dc-muted)]">/</span>
+          <span className="text-xs font-bold font-mono text-[var(--dc-muted)] tabular-nums min-w-[40px]">
+            {formatTime(duration)}
+          </span>
+        </div>
 
         {/* Volume */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <svg className="h-3.5 w-3.5 text-[var(--dc-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6.253v11.494m0-11.494a1 1 0 00-1.414 0L7.172 9.668H4a1 1 0 00-1 1v2.664a1 1 0 001 1h3.172l3.414 3.414A1 1 0 0012 17.747V6.253z" />
-          </svg>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={volume}
-            onChange={(e) => changeVolume(Number(e.target.value))}
-            className="w-16 h-1 accent-[var(--dc-accent)]"
-          />
+        <div className="flex items-center gap-2.5 ml-auto">
+          <Volume2 className="h-4 w-4 text-[var(--dc-muted)]" />
+          <div className="group relative flex items-center">
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              onChange={(e) => changeVolume(Number(e.target.value))}
+              className="w-20 h-1.5 bg-[var(--dc-chip-strong)] rounded-full appearance-none outline-none accent-[var(--dc-accent-light)] cursor-pointer hover:accent-white transition-all"
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

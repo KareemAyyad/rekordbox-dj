@@ -3,6 +3,8 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { Activity, Moon, Sun, AudioWaveform } from "lucide-react";
 import { useThemeStore } from "@/stores/theme-store";
 import { useConnectionStore } from "@/stores/connection-store";
 import type { AppTab } from "@/lib/types";
@@ -10,15 +12,16 @@ import type { AppTab } from "@/lib/types";
 function ConnectionIndicator() {
   const connected = useConnectionStore((s) => s.connected);
   return (
-    <div className="flex items-center gap-1.5" title={connected ? "Connected" : "Disconnected"}>
+    <div className="flex items-center gap-2 px-2" title={connected ? "Engine Connected" : "Engine Disconnected"}>
+      <Activity className={clsx("w-4 h-4", connected ? "text-[var(--dc-success-text)]" : "text-[var(--dc-danger-text)] animate-pulse")} />
       <div className="relative flex h-2 w-2">
         {!connected && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--dc-danger-text)] opacity-75" />
         )}
         <span
           className={clsx(
             "relative inline-flex h-2 w-2 rounded-full",
-            connected ? "bg-emerald-500" : "bg-red-500"
+            connected ? "bg-[var(--dc-success-text)] shadow-[0_0_8px_var(--dc-success-text)]" : "bg-[var(--dc-danger-text)]"
           )}
         />
       </div>
@@ -29,18 +32,21 @@ function ConnectionIndicator() {
 function TabButton({ tab, label }: { tab: AppTab; label: string }) {
   const pathname = usePathname();
   const active = pathname === `/${tab}` || (pathname === "/" && tab === "queue");
+
   return (
     <Link
       href={`/${tab}`}
       className={clsx(
-        "relative rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ease-out",
-        active
-          ? "bg-[var(--dc-chip-strong)] text-[var(--dc-text)] shadow-sm"
-          : "text-[var(--dc-muted)] hover:bg-[var(--dc-chip)] hover:text-[var(--dc-text)]"
+        "relative rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-200 z-10",
+        active ? "text-[var(--dc-text)]" : "text-[var(--dc-muted)] hover:text-[var(--dc-text)]"
       )}
     >
       {active && (
-        <span className="absolute inset-x-3 -bottom-1 h-0.5 rounded-full bg-[var(--dc-text)] opacity-40" />
+        <motion.div
+          layoutId="active-tab-indicator"
+          className="absolute inset-0 rounded-full bg-[var(--dc-chip-strong)] shadow-sm -z-10 border border-[var(--dc-border)]"
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        />
       )}
       {label}
     </Link>
@@ -52,39 +58,54 @@ export function TopNav() {
   const toggleTheme = useThemeStore((s) => s.toggle);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[color:var(--dc-border)] bg-[var(--dc-header)] backdrop-blur-[var(--dc-blur)]">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+    <header className="fixed top-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+      <div className="dc-glass-strong pointer-events-auto rounded-full flex items-center justify-between px-3 py-2 w-full max-w-4xl shadow-2xl">
         {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-[var(--dc-accent)] flex items-center justify-center shadow-sm">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-            </svg>
+        <div className="flex items-center gap-3 pl-2 pr-6 border-r border-[var(--dc-border)]">
+          <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-[var(--dc-accent)] to-[var(--dc-accent-light)] flex items-center justify-center shadow-[0_0_15px_var(--dc-accent-ring)] relative overflow-hidden">
+            <motion.div
+              className="absolute inset-0 bg-white/20"
+              animate={{ opacity: [0, 0.5, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            />
+            <AudioWaveform className="w-5 h-5 text-black z-10" strokeWidth={2.5} />
           </div>
-          <div>
-            <div className="text-sm font-semibold tracking-tight text-[var(--dc-text)]">DropCrate</div>
-            <div className="text-xs text-[var(--dc-muted)]">Paste &rarr; Download &rarr; DJ-ready</div>
+          <div className="flex flex-col">
+            <span className="text-sm font-extrabold tracking-wider text-[var(--dc-text)] uppercase leading-none">DropCrate</span>
+            <span className="text-[9px] font-medium text-[var(--dc-accent-text)] tracking-widest uppercase mt-0.5 opacity-80">Engine</span>
           </div>
         </div>
 
         {/* Tabs */}
-        <nav className="flex items-center gap-2 rounded-2xl bg-[var(--dc-card)] p-1 ring-1 ring-[color:var(--dc-border)]">
+        <nav className="flex items-center gap-1 px-4 flex-1 justify-center">
           <TabButton tab="queue" label="Queue" />
           <TabButton tab="library" label="Library" />
           <TabButton tab="segment" label="Segment" />
           <TabButton tab="settings" label="Settings" />
         </nav>
 
-        {/* Right */}
-        <div className="flex items-center gap-3">
+        {/* Right Controls */}
+        <div className="flex items-center gap-3 pl-6 border-l border-[var(--dc-border)]">
           <ConnectionIndicator />
-          <div className="h-4 w-px bg-[var(--dc-border)]" />
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={toggleTheme}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--dc-muted)] bg-[var(--dc-chip)] hover:bg-[var(--dc-chip-strong)] transition"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--dc-chip)] hover:bg-[var(--dc-chip-strong)] text-[var(--dc-text)] transition-colors border border-[var(--dc-border)] shadow-sm"
+            title="Toggle theme"
           >
-            {theme === "light" ? "Dark" : "Light"}
-          </button>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={theme}
+                initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+                animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+                transition={{ duration: 0.2 }}
+              >
+                {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              </motion.div>
+            </AnimatePresence>
+          </motion.button>
         </div>
       </div>
     </header>
