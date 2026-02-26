@@ -16,10 +16,19 @@ RUN pnpm --filter @dropcrate/web build
 # Stage 2: Python runtime
 FROM python:3.12-slim
 
-# Install ffmpeg + fpcalc + libsndfile (for audio processing)
+# Install ffmpeg + fpcalc + libsndfile + git + Node.js 18 (for PO token provider)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg curl libchromaprint-tools libsndfile1 && \
+    apt-get install -y --no-install-recommends \
+        ffmpeg curl libchromaprint-tools libsndfile1 git gnupg ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
+
+# Build bgutil PO token server (auto-generates YouTube PO tokens for yt-dlp)
+RUN git clone https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil && \
+    cd /opt/bgutil/server && \
+    npm install && \
+    npx tsc
 
 WORKDIR /app
 
@@ -37,6 +46,10 @@ COPY packages/api/ ./
 # Copy Next.js static build
 COPY --from=frontend /build/apps/web/out /app/static
 
+# Copy startup script
+COPY docker/start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Create data directories
 RUN mkdir -p /data/inbox /data/segments
 
@@ -48,4 +61,4 @@ ENV DROPCRATE_SEGMENTS_DIR=/data/segments
 
 EXPOSE 10000
 
-CMD ["uvicorn", "dropcrate.main:app", "--host", "0.0.0.0", "--port", "10000"]
+CMD ["/app/start.sh"]

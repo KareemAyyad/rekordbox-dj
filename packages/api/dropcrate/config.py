@@ -34,13 +34,6 @@ COOKIES_FILE = _env("DROPCRATE_COOKIES_FILE")
 # Uploaded cookies file (auto-detected in data dir)
 UPLOADED_COOKIES_PATH = DATABASE_PATH.parent / "youtube_cookies.txt"
 
-# YouTube OAuth2 (device code flow — same client credentials as yt-dlp)
-YTDLP_CACHE_DIR = DATABASE_PATH.parent / "yt-dlp-cache"
-YOUTUBE_OAUTH2_TOKEN_PATH = YTDLP_CACHE_DIR / "youtube-oauth2" / "token.json"
-YOUTUBE_CLIENT_ID = "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com"
-YOUTUBE_CLIENT_SECRET = "SboVhoG9s0rNafixCSGGKXAT"
-
-
 def get_cookies_file() -> str:
     """Return the effective cookies file path (env var or uploaded file)."""
     if COOKIES_FILE:
@@ -51,11 +44,13 @@ def get_cookies_file() -> str:
 
 
 def get_ytdlp_auth_opts() -> dict:
-    """Return yt-dlp auth options. Priority: browser cookies > OAuth2 > cookies file."""
+    """Return yt-dlp auth options. Priority: browser cookies > cookies file > nothing.
+
+    PO tokens are handled automatically by bgutil-ytdlp-pot-provider plugin —
+    no explicit config needed here.
+    """
     if COOKIES_FROM_BROWSER:
         return {"cookiesfrombrowser": (COOKIES_FROM_BROWSER,)}
-    if YOUTUBE_OAUTH2_TOKEN_PATH.is_file():
-        return {"username": "oauth2", "password": "", "cachedir": str(YTDLP_CACHE_DIR)}
     cookies_file = get_cookies_file()
     if cookies_file:
         return {"cookiefile": cookies_file}

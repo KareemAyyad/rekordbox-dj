@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useCallback, useState, useRef } from "react";
+import { useEffect, useCallback, useState } from "react";
 import clsx from "clsx";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import { Settings2, Save, AlertTriangle, ShieldCheck, Zap, Disc3, SlidersHorizontal, Upload, Trash2, RefreshCw } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { api } from "@/lib/api-client";
 import { PRESETS, FORMAT_OPTIONS } from "@/lib/constants";
@@ -35,83 +37,54 @@ export default function SettingsPage() {
 
   // YouTube Auth state
   const [authStatus, setAuthStatus] = useState<{ authenticated: boolean; method: string } | null>(null);
-  const [authFlow, setAuthFlow] = useState<{
-    userCode: string;
-    verificationUrl: string;
-    deviceCode: string;
-    interval: number;
-    expiresAt: number;
-  } | null>(null);
-  const [authStarting, setAuthStarting] = useState(false);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [showCookiesFallback, setShowCookiesFallback] = useState(false);
+  const [cookiesStatus, setCookiesStatus] = useState<{ configured: boolean; source: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [cookiesUploading, setCookiesUploading] = useState(false);
 
   useEffect(() => {
-    api.getSettings().then(setSettings).catch(() => {});
-    api.getYoutubeAuthStatus().then(setAuthStatus).catch(() => {});
+    api.getSettings().then(setSettings).catch(() => { });
+    api.getYoutubeAuthStatus().then(setAuthStatus).catch(() => { });
+    api.getYoutubeCookiesStatus().then(setCookiesStatus).catch(() => { });
   }, [setSettings]);
 
-  // Poll for OAuth2 token when auth flow is active
-  useEffect(() => {
-    if (!authFlow) return;
-
-    pollingRef.current = setInterval(async () => {
-      if (Date.now() > authFlow.expiresAt) {
-        if (pollingRef.current) clearInterval(pollingRef.current);
-        setAuthFlow(null);
-        toast.error("Authorization timed out. Try again.");
-        return;
-      }
-      try {
-        const result = await api.pollYoutubeAuth(authFlow.deviceCode);
-        if (result.status === "authorized") {
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          setAuthFlow(null);
-          setAuthStatus({ authenticated: true, method: "oauth2" });
-          toast.success("YouTube account connected!");
-        } else if (result.status === "denied" || result.status === "expired" || result.status === "error") {
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          setAuthFlow(null);
-          toast.error(result.error || "Authorization failed");
-        }
-      } catch {
-        // Network error — keep polling
-      }
-    }, (authFlow.interval || 5) * 1000);
-
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [authFlow]);
-
-  const startYoutubeAuth = useCallback(async () => {
-    setAuthStarting(true);
+  const refreshAuthStatus = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const data = await api.startYoutubeAuth();
-      setAuthFlow({
-        userCode: data.user_code,
-        verificationUrl: data.verification_url,
-        deviceCode: data.device_code,
-        interval: data.interval,
-        expiresAt: Date.now() + data.expires_in * 1000,
-      });
+      const [auth, cookies] = await Promise.all([
+        api.getYoutubeAuthStatus(),
+        api.getYoutubeCookiesStatus(),
+      ]);
+      setAuthStatus(auth);
+      setCookiesStatus(cookies);
     } catch {
-      toast.error("Failed to start YouTube sign-in");
+      toast.error("Failed to refresh status");
     } finally {
-      setAuthStarting(false);
+      setRefreshing(false);
     }
   }, []);
 
-  const revokeYoutubeAuth = useCallback(async () => {
+  const handleCookiesUpload = useCallback(async (file: File) => {
+    setCookiesUploading(true);
     try {
-      await api.revokeYoutubeAuth();
-      setAuthStatus({ authenticated: false, method: "none" });
-      toast.success("YouTube account disconnected");
+      await api.uploadYoutubeCookies(file);
+      toast.success("Cookies uploaded");
+      refreshAuthStatus();
     } catch {
-      toast.error("Failed to disconnect");
+      toast.error("Failed to upload cookies");
+    } finally {
+      setCookiesUploading(false);
     }
-  }, []);
+  }, [refreshAuthStatus]);
+
+  const handleCookiesDelete = useCallback(async () => {
+    try {
+      await api.deleteYoutubeCookies();
+      toast.success("Cookies removed");
+      refreshAuthStatus();
+    } catch {
+      toast.error("Failed to remove cookies");
+    }
+  }, [refreshAuthStatus]);
 
   const activePreset = detectPreset(settings);
 
@@ -139,417 +112,394 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="rounded-3xl border border-[color:var(--dc-border)] bg-[var(--dc-card)] p-6 shadow-[var(--dc-shadow)]">
-        <div className="space-y-4">
-          <div className="dc-skeleton h-6 w-32" />
-          <div className="dc-skeleton h-4 w-64" />
-          <div className="dc-skeleton h-20 w-full rounded-xl" />
-          <div className="dc-skeleton h-20 w-full rounded-xl" />
+      <div className="dc-glass-strong rounded-[2rem] p-6 lg:p-8 animate-pulse text-center py-20">
+        <div className="inline-block relative">
+          <Settings2 className="w-12 h-12 text-[var(--dc-muted)] animate-[spin_3s_linear_infinite]" />
+          <div className="absolute inset-0 bg-[var(--dc-accent)] blur-xl opacity-20 rounded-full" />
         </div>
+        <p className="mt-4 text-sm font-bold tracking-widest uppercase text-[var(--dc-muted)]">Loading Config...</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-3xl border border-[color:var(--dc-border)] bg-[var(--dc-card)] p-6 shadow-[var(--dc-shadow)]">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight text-[var(--dc-text)]">Settings</h1>
-        <span className="rounded-full bg-[var(--dc-chip)] px-2.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--dc-muted)]">
-          Global
-        </span>
-      </div>
+    <div className="space-y-8 max-w-5xl mx-auto pb-12">
+      <div className="dc-glass-strong rounded-[2rem] p-6 lg:p-8 relative overflow-hidden shadow-2xl">
+        {/* Glow backdrop */}
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[var(--dc-accent)] opacity-[0.05] blur-[120px] rounded-full pointer-events-none translate-x-1/2 -translate-y-1/2" />
 
-      {/* Quick Setup Presets */}
-      <div className="mt-6">
-        <h2 className="text-sm font-semibold text-[var(--dc-text)]">Quick Setup</h2>
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {Object.entries(PRESETS).map(([key, preset]) => (
-            <button
-              key={key}
-              onClick={() => applyPreset(key)}
-              className={clsx(
-                "rounded-2xl border p-4 text-left transition",
-                activePreset === key
-                  ? "border-[color:var(--dc-accent-border)] bg-[var(--dc-accent-bg)] ring-2 ring-[var(--dc-accent-ring)]"
-                  : "border-[color:var(--dc-border)] bg-[var(--dc-card2)] hover:border-[color:var(--dc-border-strong)]"
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <div
-                  className={clsx(
-                    "h-3 w-3 rounded-full border-2",
-                    activePreset === key
-                      ? "border-[var(--dc-accent)] bg-[var(--dc-accent)]"
-                      : "border-[var(--dc-border-strong)]"
-                  )}
-                />
-                <span className="text-sm font-medium text-[var(--dc-text)]">{preset.label}</span>
-              </div>
-              <p className="mt-1.5 text-xs text-[var(--dc-muted)]">{preset.description}</p>
-              <div className="mt-2 flex gap-1.5">
-                <span className="rounded-full bg-[var(--dc-chip)] px-2 py-0.5 text-[10px] font-medium text-[var(--dc-muted)]">
-                  {preset.audio_format.toUpperCase()}
-                </span>
-                <span className="rounded-full bg-[var(--dc-chip)] px-2 py-0.5 text-[10px] font-medium text-[var(--dc-muted)]">
-                  {preset.loudness.target_i} LUFS
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* General Settings */}
-      <div className="mt-8 space-y-5">
-        <h2 className="text-sm font-semibold text-[var(--dc-text)]">General</h2>
-
-        {/* Save To Folder */}
-        <div>
-          <label className="block text-xs font-medium text-[var(--dc-muted)] mb-1.5">Save To Folder</label>
-          <input
-            type="text"
-            value={settings.inbox_dir}
-            onChange={(e) => updateSettings({ inbox_dir: e.target.value })}
-            className="w-full rounded-xl border border-[color:var(--dc-border)] bg-[var(--dc-input)] px-4 py-2.5 text-sm text-[var(--dc-text)] font-mono focus:border-[var(--dc-accent)] focus:ring-2 focus:ring-[var(--dc-accent-ring)] focus:outline-none"
-          />
-        </div>
-
-        {/* Download Mode */}
-        <div>
-          <label className="block text-xs font-medium text-[var(--dc-muted)] mb-1.5">Download Mode</label>
-          <select
-            value={settings.mode}
-            onChange={(e) => updateSettings({ mode: e.target.value as Settings["mode"] })}
-            className="w-full rounded-xl border border-[color:var(--dc-border)] bg-[var(--dc-input)] px-4 py-2.5 text-sm text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:outline-none"
-          >
-            <option value="dj-safe">Full Quality (DJ-Safe)</option>
-            <option value="fast">Quick Download (Fast)</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Advanced Settings */}
-      <div className="mt-8">
-        <button
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="flex items-center gap-2 text-sm font-semibold text-[var(--dc-text)] hover:text-[var(--dc-accent)] transition"
-        >
-          <svg
-            className={clsx("h-4 w-4 transition-transform", showAdvanced && "rotate-90")}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-          Advanced Settings
-        </button>
-
-        {showAdvanced && (
-          <div className="dc-animate-slideUp mt-4 space-y-5 rounded-2xl border border-[color:var(--dc-border)] bg-[var(--dc-card2)] p-5">
-            {/* Audio Format */}
-            <div>
-              <label className="block text-xs font-medium text-[var(--dc-muted)] mb-1.5">Output Format</label>
-              <select
-                value={settings.audio_format}
-                onChange={(e) => updateSettings({ audio_format: e.target.value as Settings["audio_format"] })}
-                className="w-full rounded-xl border border-[color:var(--dc-border)] bg-[var(--dc-input)] px-4 py-2.5 text-sm text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:outline-none"
-              >
-                {FORMAT_OPTIONS.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label} — {f.desc}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Normalize Toggle */}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="normalize"
-                checked={settings.normalize_enabled}
-                onChange={(e) => updateSettings({ normalize_enabled: e.target.checked })}
-                className="h-4 w-4 rounded border-[var(--dc-border-strong)] text-[var(--dc-accent)] focus:ring-[var(--dc-accent-ring)]"
-              />
-              <label htmlFor="normalize" className="text-sm text-[var(--dc-text)]">
-                Make all tracks the same volume (loudness normalization)
-              </label>
-            </div>
-
-            {/* Loudness Controls */}
-            {settings.normalize_enabled && (
-              <div className="space-y-4 mt-2">
-                <h3 className="text-xs font-semibold text-[var(--dc-muted)] uppercase tracking-wider">Volume Settings</h3>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs text-[var(--dc-muted)] mb-1">Target LUFS</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={settings.loudness.target_i}
-                        onChange={(e) => updateLoudness({ target_i: Number(e.target.value) })}
-                        min={-23}
-                        max={-8}
-                        step={0.5}
-                        className="w-full rounded-lg border border-[color:var(--dc-border)] bg-[var(--dc-input)] px-3 py-2 pr-12 text-sm text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--dc-muted2)]">LUFS</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-[var(--dc-muted)] mb-1">Max Peak</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={settings.loudness.target_tp}
-                        onChange={(e) => updateLoudness({ target_tp: Number(e.target.value) })}
-                        min={-5}
-                        max={0}
-                        step={0.1}
-                        className="w-full rounded-lg border border-[color:var(--dc-border)] bg-[var(--dc-input)] px-3 py-2 pr-12 text-sm text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--dc-muted2)]">dBTP</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-[var(--dc-muted)] mb-1">Dynamic Range</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={settings.loudness.target_lra}
-                        onChange={(e) => updateLoudness({ target_lra: Number(e.target.value) })}
-                        min={5}
-                        max={20}
-                        step={1}
-                        className="w-full rounded-lg border border-[color:var(--dc-border)] bg-[var(--dc-input)] px-3 py-2 pr-8 text-sm text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--dc-muted2)]">LU</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!settings.normalize_enabled && (
-              <p className="text-xs text-[var(--dc-muted)] italic">
-                Loudness normalization is disabled. Tracks will be transcoded without volume adjustment.
-              </p>
-            )}
+        {/* Header */}
+        <div className="relative z-10 flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <Settings2 className="w-6 h-6 text-[var(--dc-accent)]" />
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--dc-text)]">Settings Overview</h1>
           </div>
-        )}
-      </div>
-
-      {/* YouTube Authentication */}
-      <div className="mt-8 space-y-4">
-        <h2 className="text-sm font-semibold text-[var(--dc-text)]">YouTube Authentication</h2>
-        <div className="rounded-2xl border border-[color:var(--dc-border)] bg-[var(--dc-card2)] p-5 space-y-4">
-          {/* Status indicator */}
-          <div className="flex items-center gap-2">
-            <div
-              className={clsx(
-                "h-2.5 w-2.5 rounded-full",
-                authStatus?.authenticated ? "bg-green-500" : "bg-red-500"
-              )}
-            />
-            <span className="text-sm text-[var(--dc-text)]">
-              {authStatus?.authenticated
-                ? authStatus.method === "oauth2"
-                  ? "Signed in with YouTube"
-                  : "Authenticated via cookies"
-                : "Not connected"}
+          <span className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgba(0,0,0,0.3)] border border-[var(--dc-border)]">
+            <span className="flex h-2 w-2 rounded-full bg-[var(--dc-success-text)] shadow-[0_0_8px_var(--dc-success-text)] animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--dc-success-text)]">
+              System Online
             </span>
-          </div>
+          </span>
+        </div>
 
-          {/* Active auth flow — show user code */}
-          {authFlow && (
-            <div className="dc-animate-fadeIn rounded-xl border border-[color:var(--dc-accent-border)] bg-[var(--dc-accent-bg)] p-4 space-y-3">
-              <p className="text-sm font-medium text-[var(--dc-text)]">
-                Go to the link below and enter this code:
-              </p>
-              <div className="flex items-center justify-center">
-                <span className="rounded-lg bg-[var(--dc-card)] px-6 py-3 text-2xl font-mono font-bold tracking-widest text-[var(--dc-accent)]">
-                  {authFlow.userCode}
-                </span>
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <a
-                  href={authFlow.verificationUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-medium text-[var(--dc-accent)] underline hover:opacity-80"
-                >
-                  {authFlow.verificationUrl}
-                </a>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(authFlow.userCode);
-                    toast.success("Code copied!");
-                  }}
-                  className="rounded-lg bg-[var(--dc-chip)] px-2 py-1 text-[10px] font-medium text-[var(--dc-muted)] hover:bg-[var(--dc-chip-strong)] transition"
-                >
-                  Copy code
-                </button>
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <svg className="h-3.5 w-3.5 dc-animate-spin text-[var(--dc-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span className="text-xs text-[var(--dc-muted)]">Waiting for authorization...</span>
-              </div>
-              <div className="flex justify-center">
-                <button
-                  onClick={() => {
-                    if (pollingRef.current) clearInterval(pollingRef.current);
-                    setAuthFlow(null);
-                  }}
-                  className="text-xs text-[var(--dc-muted)] hover:text-[var(--dc-danger-text)] transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Not authenticated — show sign in button */}
-          {!authStatus?.authenticated && !authFlow && (
-            <>
-              <p className="text-xs text-[var(--dc-muted)]">
-                Sign in with your YouTube/Google account to enable downloading.
-                You&apos;ll be given a code to enter at google.com/device.
-              </p>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={startYoutubeAuth}
-                  disabled={authStarting}
-                  className={clsx(
-                    "flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white transition",
-                    authStarting
-                      ? "bg-[var(--dc-accent)] opacity-60 cursor-not-allowed"
-                      : "bg-[var(--dc-accent)] hover:opacity-90"
-                  )}
-                >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21.582 6.186a2.506 2.506 0 00-1.768-1.768C18.254 4 12 4 12 4s-6.254 0-7.814.418c-.86.23-1.538.908-1.768 1.768C2 7.746 2 12 2 12s0 4.254.418 5.814c.23.86.908 1.538 1.768 1.768C5.746 20 12 20 12 20s6.254 0 7.814-.418a2.504 2.504 0 001.768-1.768C22 16.254 22 12 22 12s0-4.254-.418-5.814zM10 15.464V8.536L16 12l-6 3.464z" />
-                  </svg>
-                  {authStarting ? "Starting..." : "Sign in with YouTube"}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Authenticated — show disconnect */}
-          {authStatus?.authenticated && !authFlow && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={revokeYoutubeAuth}
-                className="rounded-xl border border-[color:var(--dc-danger-border)] px-4 py-2 text-xs font-medium text-[var(--dc-danger-text)] hover:bg-[var(--dc-danger-bg)] transition"
+        {/* Quick Setup Presets */}
+        <div className="relative z-10 mt-8">
+          <h2 className="text-sm font-black uppercase tracking-widest text-[var(--dc-muted)] mb-4 flex items-center gap-2">
+            <Zap className="w-4 h-4" /> Quick Config Profiles
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(PRESETS).map(([key, preset]) => (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                key={key}
+                onClick={() => applyPreset(key)}
+                className={clsx(
+                  "relative p-5 text-left transition-all duration-300 rounded-2xl overflow-hidden group",
+                  activePreset === key
+                    ? "border-[var(--dc-accent-light)] shadow-[0_0_20px_var(--dc-accent-bg)] bg-[var(--dc-accent-bg)]"
+                    : "border-[var(--dc-border-strong)] bg-[rgba(0,0,0,0.2)] hover:border-[var(--dc-accent)] hover:bg-[rgba(0,0,0,0.4)]"
+                )}
+                style={{ borderWidth: activePreset === key ? '2px' : '1px' }}
               >
-                Disconnect YouTube
-              </button>
-            </div>
-          )}
-
-          {/* Cookies fallback */}
-          {!authStatus?.authenticated && !authFlow && (
-            <div className="border-t border-[color:var(--dc-border)] pt-3 mt-3">
-              <button
-                onClick={() => setShowCookiesFallback(!showCookiesFallback)}
-                className="text-[11px] text-[var(--dc-muted2)] hover:text-[var(--dc-muted)] transition"
-              >
-                {showCookiesFallback ? "Hide" : "Alternative: Upload cookies.txt"}
-              </button>
-              {showCookiesFallback && (
-                <div className="dc-animate-fadeIn mt-3 space-y-2">
-                  <p className="text-xs text-[var(--dc-muted)]">
-                    Export cookies using a browser extension and upload the file.
-                  </p>
-                  <label
+                {activePreset === key && (
+                  <div className="absolute inset-0 bg-gradient-to-br from-[var(--dc-accent)] to-transparent opacity-10 pointer-events-none" />
+                )}
+                <div className="relative z-10 flex items-center gap-3 mb-2">
+                  <div
                     className={clsx(
-                      "inline-block cursor-pointer rounded-xl px-4 py-2 text-xs font-medium text-white transition",
-                      cookiesUploading
-                        ? "bg-[var(--dc-chip)] opacity-60 cursor-not-allowed"
-                        : "bg-[var(--dc-chip-strong)] hover:opacity-90"
+                      "h-4 w-4 rounded-full flex items-center justify-center transition-colors",
+                      activePreset === key
+                        ? "bg-[var(--dc-accent-light)] shadow-[0_0_10px_var(--dc-accent-light)]"
+                        : "bg-[var(--dc-chip-strong)] group-hover:bg-[var(--dc-border-strong)]"
                     )}
                   >
-                    {cookiesUploading ? "Uploading..." : "Upload cookies.txt"}
-                    <input
-                      type="file"
-                      accept=".txt"
-                      className="hidden"
-                      disabled={cookiesUploading}
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        setCookiesUploading(true);
-                        try {
-                          const result = await api.uploadYoutubeCookies(file);
-                          if (result.ok) {
-                            toast.success("Cookies uploaded");
-                            const status = await api.getYoutubeAuthStatus();
-                            setAuthStatus(status);
-                          } else {
-                            toast.error(result.error || "Upload failed");
-                          }
-                        } catch {
-                          toast.error("Failed to upload cookies");
-                        } finally {
-                          setCookiesUploading(false);
-                          e.target.value = "";
-                        }
-                      }}
-                    />
-                  </label>
+                    {activePreset === key && <div className="w-2 h-2 rounded-full bg-black" />}
+                  </div>
+                  <span className="text-sm font-bold text-[var(--dc-text)] tracking-wide">{preset.label}</span>
                 </div>
+                <p className="relative z-10 text-[11px] font-medium text-[var(--dc-muted)] leading-relaxed h-8">
+                  {preset.description}
+                </p>
+                <div className="relative z-10 mt-4 flex gap-2">
+                  <span className="inline-flex items-center justify-center rounded-md bg-[var(--dc-chip)] px-2 py-1 text-[10px] font-bold tracking-wider text-[var(--dc-accent-light)] border border-[var(--dc-border)]">
+                    {preset.audio_format.toUpperCase()}
+                  </span>
+                  <span className="inline-flex items-center justify-center rounded-md bg-[var(--dc-chip)] px-2 py-1 text-[10px] font-bold tracking-wider text-[var(--dc-muted)] border border-[var(--dc-border)]">
+                    {preset.loudness.target_i} LUFS
+                  </span>
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+
+        {/* General Settings */}
+        <div className="relative z-10 mt-12 space-y-6">
+          <h2 className="text-sm font-black uppercase tracking-widest text-[var(--dc-muted)] border-b border-[var(--dc-border-strong)] pb-2 mb-4">
+            Engine Configuration
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+            {/* Save To Folder */}
+            <div className="dc-glass rounded-2xl p-5 group transition-colors hover:border-[var(--dc-accent-border)]">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--dc-text)] mb-3">Output Directory</label>
+              <input
+                type="text"
+                value={settings.inbox_dir}
+                onChange={(e) => updateSettings({ inbox_dir: e.target.value })}
+                className="w-full rounded-xl border border-[var(--dc-border)] bg-[rgba(0,0,0,0.3)] px-4 py-3 text-sm text-[var(--dc-accent-light)] font-mono focus:border-[var(--dc-accent)] focus:bg-[rgba(0,0,0,0.5)] focus:shadow-[0_0_15px_var(--dc-accent-bg)] outline-none transition-all"
+                placeholder="/path/to/music/folder"
+              />
+            </div>
+
+            {/* Download Mode */}
+            <div className="dc-glass rounded-2xl p-5 group transition-colors hover:border-[var(--dc-accent-border)]">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--dc-text)] mb-3">Processing Engine Mode</label>
+              <div className="relative">
+                <select
+                  value={settings.mode}
+                  onChange={(e) => updateSettings({ mode: e.target.value as Settings["mode"] })}
+                  className="w-full rounded-xl border border-[var(--dc-border)] bg-[rgba(0,0,0,0.3)] px-4 py-3 text-sm font-bold text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:bg-[rgba(0,0,0,0.5)] outline-none transition-all appearance-none cursor-pointer"
+                >
+                  <option value="dj-safe">DJ-Safe (Full Processing & Analysis)</option>
+                  <option value="fast">Fast (Direct Download Only)</option>
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <svg className="w-4 h-4 text-[var(--dc-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced Settings */}
+        <div className="relative z-10 mt-8">
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center justify-between w-full px-5 py-4 text-xs font-bold uppercase tracking-wider text-[var(--dc-text)] bg-[rgba(0,0,0,0.2)] rounded-2xl border border-[var(--dc-border)] hover:bg-[rgba(0,0,0,0.4)] transition-all"
+          >
+            <span className="flex items-center gap-2"><Settings2 className="w-4 h-4" /> Advanced Audio Parameters</span>
+            <svg
+              className={clsx("h-4 w-4 transition-transform duration-300", showAdvanced && "rotate-180")}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          <AnimatePresence>
+            {showAdvanced && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4 space-y-6 dc-glass rounded-2xl border border-[var(--dc-border-strong)] p-6">
+                  {/* Audio Format */}
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--dc-text)] mb-2">Target Encoding Format</label>
+                    <div className="relative">
+                      <select
+                        value={settings.audio_format}
+                        onChange={(e) => updateSettings({ audio_format: e.target.value as Settings["audio_format"] })}
+                        className="w-full rounded-xl border border-[var(--dc-border)] bg-[rgba(0,0,0,0.3)] px-4 py-3 text-sm font-bold text-[var(--dc-text)] focus:border-[var(--dc-accent)] outline-none transition-all appearance-none cursor-pointer"
+                      >
+                        {FORMAT_OPTIONS.map((f) => (
+                          <option key={f.value} value={f.value}>
+                            {f.label} — {f.desc}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <svg className="w-4 h-4 text-[var(--dc-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Normalize Toggle */}
+                  <div className="flex items-center gap-4 bg-[rgba(0,0,0,0.2)] p-4 rounded-xl border border-[var(--dc-border)]">
+                    <div className="relative flex items-center">
+                      <input
+                        type="checkbox"
+                        id="normalize"
+                        checked={settings.normalize_enabled}
+                        onChange={(e) => updateSettings({ normalize_enabled: e.target.checked })}
+                        className="peer sr-only"
+                      />
+                      <div className="w-10 h-5 bg-[var(--dc-chip-strong)] rounded-full peer-checked:bg-[var(--dc-accent)] transition-colors duration-300"></div>
+                      <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform duration-300 peer-checked:translate-x-5 shadow-sm"></div>
+                    </div>
+                    <label htmlFor="normalize" className="text-sm font-bold text-[var(--dc-text)] cursor-pointer select-none">
+                      Enable LUFS Loudness Normalization
+                    </label>
+                  </div>
+
+                  {/* Loudness Controls */}
+                  {settings.normalize_enabled && (
+                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 pt-2">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--dc-accent-light)] flex items-center gap-2"><SlidersHorizontal className="w-3.5 h-3.5" /> Normalization Targets</h3>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="bg-[rgba(0,0,0,0.1)] p-3 rounded-xl border border-[var(--dc-border)]">
+                          <label className="block text-[10px] uppercase font-bold text-[var(--dc-muted)] mb-2">Target LUFS</label>
+                          <div className="relative">
+                            <input
+                              type="number" value={settings.loudness.target_i} onChange={(e) => updateLoudness({ target_i: Number(e.target.value) })} min={-23} max={-8} step={0.5}
+                              className="w-full rounded-lg border border-[var(--dc-border)] bg-[rgba(0,0,0,0.3)] px-3 py-2 text-sm font-mono text-[var(--dc-text)] focus:border-[var(--dc-accent)] outline-none"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--dc-muted2)]">LUFS</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-[rgba(0,0,0,0.1)] p-3 rounded-xl border border-[var(--dc-border)]">
+                          <label className="block text-[10px] uppercase font-bold text-[var(--dc-muted)] mb-2">True Peak Max</label>
+                          <div className="relative">
+                            <input
+                              type="number" value={settings.loudness.target_tp} onChange={(e) => updateLoudness({ target_tp: Number(e.target.value) })} min={-5} max={0} step={0.1}
+                              className="w-full rounded-lg border border-[var(--dc-border)] bg-[rgba(0,0,0,0.3)] px-3 py-2 text-sm font-mono text-[var(--dc-text)] focus:border-[var(--dc-accent)] outline-none"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--dc-muted2)]">dBTP</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-[rgba(0,0,0,0.1)] p-3 rounded-xl border border-[var(--dc-border)]">
+                          <label className="block text-[10px] uppercase font-bold text-[var(--dc-muted)] mb-2">Dynamic Range</label>
+                          <div className="relative">
+                            <input
+                              type="number" value={settings.loudness.target_lra} onChange={(e) => updateLoudness({ target_lra: Number(e.target.value) })} min={5} max={20} step={1}
+                              className="w-full rounded-lg border border-[var(--dc-border)] bg-[rgba(0,0,0,0.3)] px-3 py-2 text-sm font-mono text-[var(--dc-text)] focus:border-[var(--dc-accent)] outline-none"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--dc-muted2)]">LU</span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {!settings.normalize_enabled && (
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-[var(--dc-warning-bg)] border border-[var(--dc-warning-border)] text-[var(--dc-warning-text)]">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <p className="text-xs font-medium leading-relaxed">
+                        Loudness normalization is disabled. Tracks will be requested at their original volume, which may result in inconsistent output levels during DJ playback.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Integrations Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 relative z-10 transition-all">
+          {/* YouTube Auth */}
+          <div className="dc-glass rounded-2xl p-6 h-full flex flex-col hover:border-[var(--dc-accent-border)] transition-colors">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-black uppercase tracking-widest text-[var(--dc-text)] flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[var(--dc-accent-light)]" /> YouTube Authentication
+                </h2>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={refreshAuthStatus}
+                  disabled={refreshing}
+                  className="p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+                >
+                  <RefreshCw className={clsx("w-3.5 h-3.5 text-[var(--dc-muted)]", refreshing && "animate-spin")} />
+                </motion.button>
+              </div>
+              <p className="text-xs text-[var(--dc-muted)] mb-4 leading-relaxed">
+                PO Token auto-authentication — zero setup required. Cookies available as fallback.
+              </p>
+
+              <div className="p-3 bg-[rgba(0,0,0,0.2)] rounded-xl border border-[var(--dc-border)] mb-4 flex items-center gap-3">
+                <div className={clsx(
+                  "h-2.5 w-2.5 rounded-full shadow-[0_0_8px]",
+                  authStatus?.authenticated
+                    ? authStatus.method === "po_token"
+                      ? "bg-[var(--dc-success-text)] shadow-[var(--dc-success-text)]"
+                      : "bg-[var(--dc-warning-text)] shadow-[var(--dc-warning-text)]"
+                    : "bg-[var(--dc-danger-text)] shadow-[var(--dc-danger-text)]"
+                )} />
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-[var(--dc-text)]">
+                    {authStatus?.authenticated
+                      ? authStatus.method === "po_token"
+                        ? "Auto-Authenticated (PO Token)"
+                        : "Authenticated (Cookies)"
+                      : "No Authentication"}
+                  </span>
+                  {authStatus?.authenticated && (
+                    <span className="text-[10px] font-mono text-[var(--dc-accent-light)] uppercase tracking-wider">
+                      Method: {authStatus.method}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Cookies fallback */}
+            <div className="mt-auto pt-4 border-t border-[var(--dc-border)]">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--dc-muted)] mb-3">
+                Fallback: Cookie Auth
+              </h3>
+              {cookiesStatus?.configured ? (
+                <div className="flex items-center justify-between p-3 bg-[rgba(0,0,0,0.2)] rounded-xl border border-[var(--dc-border)]">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-[var(--dc-success-text)]" />
+                    <span className="text-xs font-bold text-[var(--dc-text)]">Cookies Active</span>
+                    <span className="text-[10px] text-[var(--dc-muted)]">({cookiesStatus.source})</span>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleCookiesDelete}
+                    className="p-2 rounded-lg text-[var(--dc-danger-text)] hover:bg-[rgba(255,0,0,0.1)] transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </motion.button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-[var(--dc-border)] text-xs font-bold text-[var(--dc-muted)] cursor-pointer hover:border-[var(--dc-accent)] hover:text-[var(--dc-text)] transition-all">
+                  <Upload className="w-3.5 h-3.5" />
+                  {cookiesUploading ? "Uploading..." : "Upload cookies.txt"}
+                  <input
+                    type="file"
+                    accept=".txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleCookiesUpload(file);
+                    }}
+                    disabled={cookiesUploading}
+                  />
+                </label>
               )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* Rekordbox Integration */}
-      <div className="mt-8 space-y-4">
-        <h2 className="text-sm font-semibold text-[var(--dc-text)]">Rekordbox Integration</h2>
-        <div className="rounded-2xl border border-[color:var(--dc-border)] bg-[var(--dc-card2)] p-5 space-y-4">
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="rekordbox-xml"
-              checked={settings.rekordbox_xml_enabled}
-              onChange={(e) => updateSettings({ rekordbox_xml_enabled: e.target.checked })}
-              className="h-4 w-4 rounded border-[var(--dc-border-strong)] text-[var(--dc-accent)] focus:ring-[var(--dc-accent-ring)]"
-            />
-            <label htmlFor="rekordbox-xml" className="text-sm text-[var(--dc-text)]">
-              Generate Rekordbox XML after each batch
+          {/* Rekordbox Integration */}
+          <div className="dc-glass rounded-2xl p-6 h-full flex flex-col justify-between hover:border-[var(--dc-accent-border)] transition-colors">
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-widest text-[var(--dc-text)] mb-2 flex items-center gap-2">
+                <Disc3 className="w-4 h-4 text-[var(--dc-accent-light)]" /> Rekordbox Integration
+              </h2>
+              <p className="text-xs text-[var(--dc-muted)] mb-4 leading-relaxed">
+                Auto-generate XML playlists with intelligent sorting (by energy, genre, vibe). Imports directly to your collection.
+              </p>
+            </div>
+
+            <label className="flex items-center gap-4 mt-auto p-4 bg-[rgba(0,0,0,0.2)] rounded-xl border border-[var(--dc-border)] cursor-pointer group">
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox" checked={settings.rekordbox_xml_enabled} onChange={(e) => updateSettings({ rekordbox_xml_enabled: e.target.checked })}
+                  className="peer sr-only"
+                />
+                <div className="w-10 h-5 bg-[var(--dc-chip-strong)] rounded-full peer-checked:bg-[var(--dc-accent)] transition-colors duration-300"></div>
+                <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform duration-300 peer-checked:translate-x-5 shadow-sm"></div>
+              </div>
+              <span className="text-sm font-bold text-[var(--dc-text)] group-hover:text-[var(--dc-accent-light)] transition-colors">
+                Emit XML on Pipeline Completion
+              </span>
             </label>
           </div>
-          <p className="text-xs text-[var(--dc-muted)]">
-            Creates a <code className="rounded bg-[var(--dc-chip)] px-1 py-0.5 text-[10px] font-mono">dropcrate_import.xml</code> file
-            in your inbox folder with auto-generated playlists by genre, energy, and time slot.
-            Import in Rekordbox via File &gt; Import Collection in XML format.
-          </p>
         </div>
-      </div>
 
-      {/* Save Button */}
-      <div className="mt-8 flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className={clsx(
-            "rounded-xl px-6 py-2.5 text-sm font-medium text-white transition",
-            saving
-              ? "bg-[var(--dc-accent)] opacity-60 cursor-not-allowed"
-              : "bg-[var(--dc-accent)] hover:opacity-90"
-          )}
+        {/* Floating Save Bar */}
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2, type: "spring", stiffness: 300, damping: 25 }}
+          className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-6 px-6 py-4 bg-[rgba(20,20,20,0.85)] border border-[var(--dc-border-strong)] rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl w-full max-w-md"
         >
-          {saving ? "Saving..." : "Save Settings"}
-        </button>
+          <span className="text-sm font-bold tracking-wide text-[var(--dc-muted)] uppercase">
+            Commit Config
+          </span>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleSave}
+            disabled={saving}
+            className={clsx(
+              "flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-black uppercase tracking-widest text-[#050505] transition-all duration-300 shadow-[0_0_20px_var(--dc-accent-bg)]",
+              saving
+                ? "bg-[var(--dc-accent-light)] opacity-60 cursor-not-allowed"
+                : "bg-gradient-to-r from-[var(--dc-accent)] to-[var(--dc-accent-light)] hover:shadow-[0_0_30px_var(--dc-accent-light)]"
+            )}
+          >
+            {saving ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full border-2 border-black border-t-transparent animate-spin" />
+                Writing
+              </span>
+            ) : (
+              <>
+                <Save className="w-4 h-4 fill-current" /> Save Network State
+              </>
+            )}
+          </motion.button>
+        </motion.div>
       </div>
     </div>
   );

@@ -83,28 +83,10 @@ export const api = {
     URL.revokeObjectURL(url);
   },
 
-  // --- YouTube Auth (OAuth2 device flow) ---
+  // --- YouTube Auth (PO Token auto-auth + cookies fallback) ---
 
   getYoutubeAuthStatus: () =>
     apiFetch<{ authenticated: boolean; method: string }>("/api/settings/youtube-auth/status"),
-
-  startYoutubeAuth: () =>
-    apiFetch<{
-      device_code: string;
-      user_code: string;
-      verification_url: string;
-      expires_in: number;
-      interval: number;
-    }>("/api/settings/youtube-auth/start", { method: "POST" }),
-
-  pollYoutubeAuth: (deviceCode: string) =>
-    apiFetch<{ status: string; error?: string }>("/api/settings/youtube-auth/poll", {
-      method: "POST",
-      body: JSON.stringify({ device_code: deviceCode }),
-    }),
-
-  revokeYoutubeAuth: () =>
-    apiFetch<{ ok: boolean }>("/api/settings/youtube-auth", { method: "DELETE" }),
 
   // --- YouTube Cookies (fallback) ---
 
