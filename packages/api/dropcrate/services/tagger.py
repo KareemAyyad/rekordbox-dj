@@ -52,6 +52,8 @@ def _build_tags(
     label: str | None = None,
     source_url: str = "",
     source_id: str = "",
+    bpm: int | None = None,
+    key: str | None = None,
 ) -> dict[str, str]:
     """Build tag dict matching the current TypeScript implementation."""
     comment_parts: list[str] = []
@@ -80,6 +82,11 @@ def _build_tags(
         tags["date"] = year.strip()
     if label and label.strip():
         tags["publisher"] = label.strip()
+    if bpm:
+        tags["bpm"] = str(bpm)
+    # ffmpeg standard metadata map for Key is TBPM for bpm and grouping or comment for key usually. We will embed it into initialkey if possible, though 'initialkey' is commonly used by ffmpeg for TKEY.
+    if key:
+        tags["initialkey"] = key
     return tags
 
 

@@ -188,23 +188,27 @@ export default function QueuePage() {
 
   const detectedUrls = extractYouTubeUrls(inputText);
 
-  const handleAdd = useCallback(() => {
-    if (detectedUrls.length === 0) return;
-    const defaults: DJTags = { genre: "Other", energy: "", time: "", vibe: "" };
-    addItems(detectedUrls, defaults);
-    setInputText("");
+  // Auto-start pipeline when URLs are detected
+  useEffect(() => {
+    if (detectedUrls.length === 0 || running) return;
 
-    // Auto-classify
-    const newItems = useQueueStore.getState().items.slice(-detectedUrls.length);
-    const classifyItems = newItems.map((i) => ({ id: i.id, url: i.url }));
+    const autoStart = async () => {
+      // 1. Add to Queue
+      const defaults: DJTags = { genre: "Other", energy: "", time: "", vibe: "" };
+      addItems(detectedUrls, defaults);
+      setInputText("");
 
-    for (const ci of classifyItems) {
-      updateItemAuto(ci.id, { status: "running" });
-    }
+      // 2. Auto-classify
+      const state = useQueueStore.getState();
+      const newItems = state.items.slice(-detectedUrls.length);
+      const classifyItems = newItems.map((i) => ({ id: i.id, url: i.url }));
 
-    api
-      .classify(classifyItems)
-      .then((res) => {
+      for (const ci of classifyItems) {
+        updateItemAuto(ci.id, { status: "running" });
+      }
+
+      // Fire and forget classification
+      api.classify(classifyItems).then((res) => {
         for (const r of res.results) {
           updateItemAuto(r.id, {
             status: "done",
@@ -212,7 +216,6 @@ export default function QueuePage() {
             notes: r.notes,
             kind: r.kind,
           });
-          // Apply auto-tags
           const store = useQueueStore.getState();
           const item = store.items.find((i) => i.id === r.id);
           if (item) {
@@ -224,13 +227,41 @@ export default function QueuePage() {
             store.updateItemTags(r.id, tags);
           }
         }
-      })
-      .catch(() => {
+      }).catch(() => {
         for (const ci of classifyItems) {
           updateItemAuto(ci.id, { status: "error" });
         }
       });
-  }, [detectedUrls, addItems, updateItemAuto]);
+
+      // 3. Immediately Start Engine
+      const currentState = useQueueStore.getState();
+      const queued = currentState.items.filter((i) => i.status === "queued" || i.status === "error");
+
+      try {
+        const res = await api.startQueue({
+          inbox_dir: settings.inbox_dir,
+          mode: settings.mode,
+          audio_format: settings.audio_format,
+          normalize_enabled: settings.normalize_enabled,
+          loudness: settings.loudness,
+          items: queued.map((i) => ({
+            id: i.id,
+            url: i.url,
+            preset_snapshot: i.presetSnapshot,
+          })),
+        });
+        setJobId(res.job_id);
+        setRunning(true);
+        toast.success("Extraction engine started");
+      } catch (e) {
+        toast.error("Failed to start engine automatically");
+      }
+    };
+
+    autoStart();
+
+  }, [detectedUrls, running, addItems, updateItemAuto, settings, setJobId, setRunning]);
+
 
   const handleStart = useCallback(async () => {
     const queued = items.filter((i) => i.status === "queued" || i.status === "error");
@@ -326,31 +357,12 @@ export default function QueuePage() {
                 <div className="flex items-center gap-3">
                   {detectedUrls.length > 0 ? (
                     <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--dc-accent-bg)] text-[var(--dc-accent)] font-bold text-xs ring-1 ring-[var(--dc-accent-border)]">
-                        {detectedUrls.length}
-                      </span>
-                      <span className="text-sm font-semibold text-[var(--dc-accent-text)] tracking-wider uppercase">URLs Ready</span>
+                      <Loader2 className="w-5 h-5 text-[var(--dc-accent)] animate-spin" />
+                      <span className="text-sm font-semibold text-[var(--dc-accent-text)] tracking-wider uppercase">Auto-Starting Engine...</span>
                     </div>
                   ) : (
                     <span className="text-xs font-medium text-[var(--dc-muted)] uppercase tracking-widest flex items-center gap-1.5"><Music className="w-4 h-4" /> Drop tracks to begin</span>
                   )}
-                </div>
-
-                <div className="flex gap-3">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleAdd}
-                    disabled={detectedUrls.length === 0}
-                    className={clsx(
-                      "rounded-full px-6 py-2.5 text-sm font-bold uppercase tracking-wider transition-all duration-300",
-                      detectedUrls.length > 0
-                        ? "bg-white text-black hover:bg-gray-100 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
-                        : "bg-[var(--dc-chip)] text-[var(--dc-muted2)] cursor-not-allowed opacity-50"
-                    )}
-                  >
-                    Add to Queue
-                  </motion.button>
                 </div>
               </div>
             </div>
@@ -376,7 +388,7 @@ export default function QueuePage() {
                   onClick={handleStart}
                   className="rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 px-8 py-3 text-sm font-extrabold text-[#022c22] uppercase tracking-widest hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center gap-2"
                 >
-                  <Play className="w-4 h-4 fill-current" /> Start Engine
+                  <Play className="w-4 h-4 fill-current" /> Resume Engine
                 </motion.button>
               )}
               {running && (

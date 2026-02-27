@@ -2,7 +2,7 @@ services:
   - type: web
     name: dropcrate-web
     env: docker
-    plan: starter
+    plan: standard_plus
     region: ohio
     dockerfilePath: docker/Dockerfile
     healthCheckPath: /api/health

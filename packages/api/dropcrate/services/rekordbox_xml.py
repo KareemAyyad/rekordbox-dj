@@ -128,6 +128,14 @@ def generate_rekordbox_xml(tracks: list[dict], output_path: Path) -> Path:
         }
 
         # Optional fields — only include if present
+        bpm = t.get("bpm")
+        if bpm:
+            attrs["AverageBpm"] = _safe_int(bpm)
+        
+        key = t.get("key")
+        if key:
+            attrs["Tonality"] = str(key).strip()
+
         audio_fmt = t.get("audio_format", "")
         if audio_fmt and audio_fmt in KIND_MAP:
             attrs["Kind"] = KIND_MAP[audio_fmt]
@@ -183,7 +191,47 @@ def generate_rekordbox_xml(tracks: list[dict], output_path: Path) -> Path:
             except OSError:
                 pass
 
-        SubElement(collection, "TRACK", **attrs)
+        track_node = SubElement(collection, "TRACK", **attrs)
+
+        # Inject AI Hot Cues & Beat Grid First Position
+        hot_cues_json = t.get("hot_cues")
+        if hot_cues_json:
+            import json
+            try:
+                cues = json.loads(hot_cues_json)
+                if cues:
+                    # The first cue is the Intro/Beat 1. We use this to set the Rekordbox Grid POSITION 
+                    # so the track is perfectly gridded on CDJs without manual adjustment.
+                    SubElement(
+                        track_node, 
+                        "POSITION", 
+                        Inizio=str(cues[0]["time"]), 
+                        Bpm=str(bpm) if bpm else "120.00", 
+                        Num="1"
+                    )
+
+                    # For the drops/breaks, map them to standard Hot Cue pads (A, B, C...)
+                    for i, cue in enumerate(cues):
+                        if i >= 8: # Rekordbox supports max 8 standard hot cues
+                            break
+                        
+                        # Map colors (White for intro, Red for drops)
+                        r = "255" if cue["color"] == "red" else "255"
+                        g = "0" if cue["color"] == "red" else "255"
+                        b = "0" if cue["color"] == "red" else "255"
+
+                        SubElement(
+                            track_node, 
+                            "MARK", 
+                            Name=cue["name"], 
+                            Type="cue", 
+                            Num=str(i), 
+                            Start=str(cue["time"]), 
+                            Red=r, Green=g, Blue=b
+                        )
+            except Exception as e:
+                # Silently fail if JSON parsing fails, we don't want to corrupt the whole XML export
+                pass
 
     # --- PLAYLISTS ---
     playlists_root = SubElement(root, "PLAYLISTS")

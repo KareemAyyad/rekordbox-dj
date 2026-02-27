@@ -170,21 +170,46 @@ export default function SegmentPage() {
   // SSE for auto-segment progress
   useSegmentSSE(jobId);
 
-  const handleUpload = useCallback(async (file: File) => {
+  const handleUploadAndSegment = useCallback(async (file: File) => {
     setUploading(true);
     setError(null);
+    let sessionRes;
+
+    // 1. Upload File
     try {
-      const sess = await api.uploadAudio(file);
-      setSession(sess);
-      toast.success(`Uploaded: ${sess.filename}`);
+      sessionRes = await api.uploadAudio(file);
+      setSession(sessionRes);
+      toast.success(`Uploaded: ${sessionRes.filename}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Upload failed";
       setError(msg);
       toast.error(msg);
-    } finally {
       setUploading(false);
+      return;
     }
-  }, [setSession, setError]);
+
+    setUploading(false);
+
+    // 2. Automatically Start Segmentation (Default to all categories)
+    setProcessing(true);
+    setError(null);
+    try {
+      const res = await api.autoSegment({
+        session_id: sessionRes.id,
+        categories: undefined, // undefined = use all defaults on backend
+        guidance_scale: guidanceScale,
+        num_steps: numSteps,
+        reranking_candidates: rerankingCandidates,
+      });
+      setJobId(res.job_id);
+      toast.success("Stem separation started");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Auto-segment failed";
+      setError(msg);
+      toast.error(msg);
+      setProcessing(false);
+    }
+  }, [setSession, setError, guidanceScale, numSteps, rerankingCandidates, setJobId, setProcessing]);
 
   const handleDescribe = useCallback(async () => {
     if (!session || !prompt.trim()) return;
@@ -305,7 +330,7 @@ export default function SegmentPage() {
                 <p className="mt-3 text-sm text-[var(--dc-muted)]">Uploading...</p>
               </div>
             ) : (
-              <UploadZone onUpload={handleUpload} />
+              <UploadZone onUpload={handleUploadAndSegment} />
             )
           ) : (
             <div className="space-y-4">
@@ -372,42 +397,16 @@ export default function SegmentPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {/* Selectable category badges */}
-                  <div className="flex flex-wrap gap-2">
-                    {SEGMENT_CATEGORIES.map((cat) => {
-                      const selected = selectedCats.has(cat.label);
-                      return (
-                        <button
-                          key={cat.label}
-                          onClick={() => toggleCategory(cat.label)}
-                          disabled={processing}
-                          className={clsx(
-                            "rounded-full px-3 py-1 text-xs font-medium transition disabled:opacity-50",
-                            selected
-                              ? "bg-[var(--dc-accent)] text-white"
-                              : "bg-[var(--dc-chip)] text-[var(--dc-muted)] hover:bg-[var(--dc-chip-strong)]"
-                          )}
-                          title={cat.desc}
-                        >
-                          {cat.label}
-                        </button>
-                      );
-                    })}
+                  <div className="flex flex-wrap gap-2 opacity-50 pointer-events-none">
+                    {SEGMENT_CATEGORIES.map((cat) => (
+                      <div
+                        key={cat.label}
+                        className="rounded-full px-3 py-1 text-xs font-medium bg-[var(--dc-accent)] text-white"
+                      >
+                        {cat.label}
+                      </div>
+                    ))}
                   </div>
-                  <button
-                    onClick={handleAutoSegment}
-                    disabled={processing}
-                    className="w-full rounded-xl bg-[var(--dc-accent)] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 transition disabled:opacity-50"
-                  >
-                    {processing ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="h-4 w-4 dc-animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Segmenting...
-                      </span>
-                    ) : (
-                      `Auto-Segment into ${selectedCats.size} Sound${selectedCats.size !== 1 ? "s" : ""}`
-                    )}
-                  </button>
                 </div>
               )}
 

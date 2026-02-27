@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS library_tracks (
     artist TEXT NOT NULL DEFAULT '',
     title TEXT NOT NULL DEFAULT '',
     genre TEXT NOT NULL DEFAULT 'Other',
+    bpm INTEGER,
+    key TEXT,
     energy TEXT,
     time_slot TEXT,
     vibe TEXT,

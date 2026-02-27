@@ -18,7 +18,7 @@ from pathlib import Path
 from dropcrate import config
 from dropcrate.database import get_db
 from dropcrate.models.schemas import QueueStartRequest
-from dropcrate.services import download, fingerprint, normalize, tagger, transcode
+from dropcrate.services import download, fingerprint, harmonic, normalize, tagger, transcode
 from dropcrate.services.classify_heuristic import heuristic_classify
 from dropcrate.services.job_manager import Job, job_manager
 from dropcrate.services.naming import make_rekordbox_filename, sanitize_file_component
@@ -205,6 +205,10 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
                 effective_year = None
                 effective_label = None
 
+            # Stage 4.5: Harmonic Analysis
+            progress("analysis")
+            bpm, camelot_key, hot_cues = await asyncio.to_thread(harmonic.analyze_audio, str(downloaded_path))
+
             # Build tags
             tags = tagger._build_tags(
                 artist=effective_artist,
@@ -218,6 +222,8 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
                 label=effective_label,
                 source_url=source_url,
                 source_id=source_id,
+                bpm=bpm if bpm > 0 else None,
+                key=camelot_key if camelot_key else None,
             )
 
             if job.cancel_requested:
@@ -232,6 +238,8 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
                 artist=tags.get("artist", "Unknown"),
                 title=tags.get("title", "Unknown"),
                 ext=final_ext,
+                bpm=bpm if bpm > 0 else None,
+                key=camelot_key if camelot_key else None,
             )
             final_path = inbox_dir / final_filename
 
@@ -289,6 +297,9 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
                     "album": effective_album,
                     "year": effective_year,
                     "label": effective_label,
+                    "bpm": bpm if bpm > 0 else None,
+                    "key": camelot_key if camelot_key else None,
+                    "hotCues": hot_cues,
                 },
                 "djDefaults": {
                     "genre": effective_genre,
@@ -318,10 +329,10 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
             db = await get_db()
             await db.execute(
                 """INSERT OR REPLACE INTO library_tracks
-                   (id, file_path, sidecar_path, artist, title, genre, energy, time_slot, vibe,
+                   (id, file_path, sidecar_path, artist, title, genre, bpm, key, hot_cues, energy, time_slot, vibe,
                     source_url, source_id, duration_seconds, audio_format,
                     album, year, label, downloaded_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     track_id,
                     str(final_path),
@@ -329,6 +340,9 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
                     effective_artist,
                     effective_title,
                     effective_genre,
+                    bpm if bpm > 0 else None,
+                    camelot_key if camelot_key else None,
+                    json.dumps(hot_cues) if hot_cues else None,
                     effective_energy,
                     effective_time,
                     effective_vibe,

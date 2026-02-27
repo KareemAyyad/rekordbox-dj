@@ -2,35 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body { 
-  height: 100%; 
+html,
+body {
+  height: 100%;
   overscroll-behavior: none;
 }
 
-/* Base Light Theme (keeping it clean, but heavily prioritizing dark mode) */
+/* Base Light Theme (The Glacier) */
 :root {
   --dc-bg: #f8fafc;
-  --dc-bg-gradient: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  --dc-header: rgba(255, 255, 255, 0.7);
-  --dc-card: rgba(255, 255, 255, 0.9);
-  --dc-card2: rgba(248, 250, 252, 0.9);
-  --dc-input: #ffffff;
-  --dc-border: rgba(226, 232, 240, 0.8);
-  --dc-border-strong: rgba(203, 213, 225, 0.8);
+  --dc-bg-gradient: radial-gradient(circle at top right, #ffffff 0%, #f1f5f9 100%);
+  --dc-header: rgba(255, 255, 255, 0.4);
+  --dc-card: rgba(255, 255, 255, 0.5);
+  --dc-card2: rgba(255, 255, 255, 0.7);
+  --dc-input: rgba(255, 255, 255, 0.8);
+  --dc-border: rgba(255, 255, 255, 0.8);
+  --dc-border-strong: #ffffff;
   --dc-text: #0f172a;
-  --dc-muted: #475569;
+  --dc-muted: #64748b;
   --dc-muted2: #94a3b8;
-  --dc-chip: rgba(241, 245, 249, 0.8);
-  --dc-chip-strong: rgba(226, 232, 240, 0.8);
-  /* Electric Indigo / Cyan vibes for light mode */
-  --dc-accent: #4f46e5;
-  --dc-accent-light: #6366f1;
+  --dc-chip: rgba(255, 255, 255, 0.6);
+  --dc-chip-strong: rgba(255, 255, 255, 0.9);
+
+  /* Bright Ocean Blue Accent */
+  --dc-accent: #0ea5e9;
+  --dc-accent-light: #38bdf8;
   --dc-accent-contrast: #ffffff;
-  --dc-accent-ring: rgba(79, 70, 229, 0.35);
-  --dc-accent-bg: rgba(79, 70, 229, 0.08);
-  --dc-accent-border: rgba(79, 70, 229, 0.26);
-  --dc-accent-text: #4338ca;
-  
+  --dc-accent-ring: rgba(14, 165, 233, 0.35);
+  --dc-accent-bg: rgba(14, 165, 233, 0.08);
+  --dc-accent-border: rgba(14, 165, 233, 0.26);
+  --dc-accent-text: #0369a1;
+
   /* Status Colors */
   --dc-danger: #ef4444;
   --dc-danger-bg: rgba(239, 68, 68, 0.08);
@@ -44,9 +46,9 @@ html, body {
   --dc-warning-bg: rgba(245, 158, 11, 0.08);
   --dc-warning-border: rgba(245, 158, 11, 0.26);
   --dc-warning-text: #d97706;
-  
-  --dc-shadow: 0 4px 20px -2px rgba(0,0,0,0.05), 0 0 3px rgba(0,0,0,0.02);
-  --dc-shadow-lg: 0 10px 30px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+
+  --dc-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 1);
+  --dc-shadow-lg: 0 10px 30px -3px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
   --dc-blur: 24px;
 }
 
@@ -65,7 +67,7 @@ html[data-theme="dark"] {
   --dc-muted2: #475569;
   --dc-chip: rgba(255, 255, 255, 0.03);
   --dc-chip-strong: rgba(255, 255, 255, 0.06);
-  
+
   /* Blinding Electric Cyan/Blue Accent */
   --dc-accent: #06b6d4;
   --dc-accent-light: #22d3ee;
@@ -74,7 +76,7 @@ html[data-theme="dark"] {
   --dc-accent-bg: rgba(6, 182, 212, 0.1);
   --dc-accent-border: rgba(6, 182, 212, 0.2);
   --dc-accent-text: #22d3ee;
-  
+
   --dc-danger: #f87171;
   --dc-danger-bg: rgba(248, 113, 113, 0.1);
   --dc-danger-border: rgba(248, 113, 113, 0.2);
@@ -87,9 +89,9 @@ html[data-theme="dark"] {
   --dc-warning-bg: rgba(251, 191, 36, 0.1);
   --dc-warning-border: rgba(251, 191, 36, 0.2);
   --dc-warning-text: #fcd34d;
-  
-  --dc-shadow: 0 4px 20px -2px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.02);
-  --dc-shadow-lg: 0 20px 40px -4px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.03);
+
+  --dc-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  --dc-shadow-lg: 0 20px 40px -4px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   --dc-blur: 32px;
 }
 
@@ -130,7 +132,7 @@ body {
 
 html[data-theme="light"] .dc-ambient-bg::before,
 html[data-theme="light"] .dc-ambient-bg::after {
-  opacity: 0.08;
+  opacity: 0.25;
 }
 
 .dc-ambient-bg::before {
@@ -152,13 +154,16 @@ html[data-theme="light"] .dc-ambient-bg::after {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--dc-border-strong);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--dc-muted2);
 }
@@ -170,26 +175,92 @@ html[data-theme="light"] .dc-ambient-bg::after {
 }
 
 @keyframes dc-orb-float {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(5%, 10%) scale(1.05); }
-  100% { transform: translate(-5%, -5%) scale(0.95); }
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate(5%, 10%) scale(1.05);
+  }
+
+  100% {
+    transform: translate(-5%, -5%) scale(0.95);
+  }
 }
 
-@keyframes dc-spin { to { transform: rotate(360deg); } }
-@keyframes dc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-@keyframes dc-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-@keyframes dc-fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes dc-slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes dc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
-.dc-animate-spin { animation: dc-spin 1s linear infinite; }
-.dc-animate-pulse { animation: dc-pulse 2s ease-in-out infinite; }
+@keyframes dc-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes dc-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes dc-fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dc-slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dc-animate-spin {
+  animation: dc-spin 1s linear infinite;
+}
+
+.dc-animate-pulse {
+  animation: dc-pulse 2s ease-in-out infinite;
+}
+
 .dc-animate-shimmer {
   background: linear-gradient(90deg, var(--dc-chip) 0%, var(--dc-chip-strong) 50%, var(--dc-chip) 100%);
   background-size: 200% 100%;
   animation: dc-shimmer 1.5s ease-in-out infinite;
 }
-.dc-animate-fadeIn { animation: dc-fadeIn 0.2s ease-out forwards; }
-.dc-animate-slideUp { animation: dc-slideUp 0.3s ease-out forwards; }
+
+.dc-animate-fadeIn {
+  animation: dc-fadeIn 0.2s ease-out forwards;
+}
+
+.dc-animate-slideUp {
+  animation: dc-slideUp 0.3s ease-out forwards;
+}
 
 /* Premium Glassmorphism Utility */
 .dc-glass {
