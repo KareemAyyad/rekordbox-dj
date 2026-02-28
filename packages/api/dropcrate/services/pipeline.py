@@ -370,10 +370,13 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
             shutil.rmtree(str(work_dir), ignore_errors=True)
 
     except Exception as e:
+        import traceback
+        err_trace = traceback.format_exc()
+        logger.error(f"FATAL ERROR in _process_one for {url}: {e}\n{err_trace}")
         job_manager.broadcast(job, {
             "type": "item-error",
             "job_id": job.id,
             "item_id": item.id,
             "url": url,
-            "error": str(e),
+            "error": f"{str(e)}",
         })
