@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import shutil
 import uuid
@@ -25,6 +26,8 @@ from dropcrate.services.naming import make_rekordbox_filename, sanitize_file_com
 from dropcrate.services.title_parser import normalize_from_youtube_title
 from dropcrate.services.metadata import fetch_video_info
 
+
+logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT = 3
 
@@ -90,7 +93,20 @@ async def run_pipeline(job: Job, req: QueueStartRequest) -> None:
     for item in req.items:
         tasks.append(_process_with_semaphore(sem, job, req, item, inbox_dir))
 
-    await asyncio.gather(*tasks, return_exceptions=True)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Log any silently swallowed exceptions from gather
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            item = req.items[i]
+            logger.error(f"Unhandled exception for item {item.id} ({item.url}): {result}")
+            job_manager.broadcast(job, {
+                "type": "item-error",
+                "job_id": job.id,
+                "item_id": item.id,
+                "url": item.url,
+                "error": str(result),
+            })
 
     # Generate rekordbox XML with auto-playlists for completed tracks
     await _maybe_generate_rekordbox_xml(job, inbox_dir)
