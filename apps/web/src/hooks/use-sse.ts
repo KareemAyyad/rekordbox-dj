@@ -13,10 +13,12 @@ export function useSSE(jobId: string | null) {
     if (!jobId) return;
 
     const es = new EventSource(`/api/queue/events?job_id=${jobId}`);
+    console.log("[SSE] Connecting to /api/queue/events?job_id=" + jobId);
 
     es.onmessage = (msg) => {
       try {
         const event: SSEEvent = JSON.parse(msg.data);
+        console.log("[SSE] Event received:", event);
         switch (event.type) {
           case "queue-start":
             setRunning(true);
@@ -42,7 +44,8 @@ export function useSSE(jobId: string | null) {
       }
     };
 
-    es.onerror = () => {
+    es.onerror = (err) => {
+      console.error("[SSE] Connection error:", err);
       // Browser auto-reconnects
     };
 

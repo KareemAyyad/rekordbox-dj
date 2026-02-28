@@ -193,15 +193,18 @@ export default function QueuePage() {
     if (detectedUrls.length === 0 || running) return;
 
     const autoStart = async () => {
+      console.log("[Queue] Auto-start triggered. Detected URLs:", detectedUrls);
       // 1. Add to Queue
       const defaults: DJTags = { genre: "Other", energy: "", time: "", vibe: "" };
       addItems(detectedUrls, defaults);
       setInputText("");
+      console.log("[Queue] Items added to store. Clearing input.");
 
       // 2. Auto-classify
       const state = useQueueStore.getState();
       const newItems = state.items.slice(-detectedUrls.length);
       const classifyItems = newItems.map((i) => ({ id: i.id, url: i.url }));
+      console.log("[Queue] Starting AI classification for", classifyItems.length, "items");
 
       for (const ci of classifyItems) {
         updateItemAuto(ci.id, { status: "running" });
@@ -209,6 +212,7 @@ export default function QueuePage() {
 
       // Fire and forget classification
       api.classify(classifyItems).then((res) => {
+        console.log("[Queue] Classification response:", res);
         for (const r of res.results) {
           updateItemAuto(r.id, {
             status: "done",
@@ -227,7 +231,8 @@ export default function QueuePage() {
             store.updateItemTags(r.id, tags);
           }
         }
-      }).catch(() => {
+      }).catch((err) => {
+        console.error("[Queue] Classification failed:", err);
         for (const ci of classifyItems) {
           updateItemAuto(ci.id, { status: "error" });
         }
@@ -236,6 +241,7 @@ export default function QueuePage() {
       // 3. Immediately Start Engine
       const currentState = useQueueStore.getState();
       const queued = currentState.items.filter((i) => i.status === "queued" || i.status === "error");
+      console.log("[Queue] Starting engine with", queued.length, "queued items");
 
       try {
         const res = await api.startQueue({
@@ -252,8 +258,10 @@ export default function QueuePage() {
         });
         setJobId(res.job_id);
         setRunning(true);
+        console.log("[Queue] Engine started! Job ID:", res.job_id);
         toast.success("Extraction engine started");
       } catch (e) {
+        console.error("[Queue] Engine start FAILED:", e);
         toast.error("Failed to start engine automatically");
       }
     };

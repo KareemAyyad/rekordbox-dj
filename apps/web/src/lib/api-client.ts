@@ -16,15 +16,19 @@ export function mapSegment(s: any): SegmentItem {
 }
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+  console.log(`[API] ${opts?.method || 'GET'} ${path}`);
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...opts?.headers },
     ...opts,
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error(`[API] ERROR ${res.status} on ${path}:`, text);
     throw new Error(`API error ${res.status}: ${text}`);
   }
-  return res.json();
+  const data = await res.json();
+  console.log(`[API] Response from ${path}:`, data);
+  return data;
 }
 
 export const api = {
