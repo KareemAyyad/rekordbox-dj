@@ -29,9 +29,10 @@ def _sync_fetch_info(url: str) -> dict:
     ]
 
     import subprocess as sp
-    logger.error(f"[diagnostics] node -v: {sp.getoutput('node -v')}")
-    logger.error(f"[diagnostics] which node: {sp.getoutput('which node')}")
-    logger.error(f"[diagnostics] env PATH: {sp.getoutput('echo $PATH')}")
+    node_v = sp.getoutput('node -v')
+    which_node = sp.getoutput('which node')
+    env_path = sp.getoutput('echo $PATH')
+    raise RuntimeError(f"DEBUG_NODE: v='{node_v}', which='{which_node}', path='{env_path}'")
 
     from dropcrate import config
     cookies_file = config.get_cookies_file()
