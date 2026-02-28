@@ -145,11 +145,16 @@ async def auto_segment(req: AutoSegmentRequest):
                 segment_job_manager.broadcast(job, {"type": "model-ready"})
                 segment_job_manager.broadcast(job, {
                     "type": "segment-start",
-                    "label": "Separating all stems via AI (this takes ~30-120s)...",
+                    "label": f"Separating all stems via AI (shifts={req.shifts}, overlap={req.overlap})...",
                     "index": 0, "total": 2,
                 })
 
-                results = await stems.separate_audio(str(audio_path), str(session_dir))
+                results = await stems.separate_audio(
+                    str(audio_path), 
+                    str(session_dir),
+                    shifts=req.shifts,
+                    overlap=req.overlap,
+                )
 
                 segment_job_manager.broadcast(job, {
                     "type": "segment-start",

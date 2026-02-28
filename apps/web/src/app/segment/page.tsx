@@ -96,14 +96,12 @@ function ProgressBar() {
 /* ---------- Advanced Parameters ---------- */
 
 function AdvancedParams({
-  guidanceScale,
-  numSteps,
-  rerankingCandidates,
+  shifts,
+  overlap,
   onChange,
 }: {
-  guidanceScale: number;
-  numSteps: number;
-  rerankingCandidates: number;
+  shifts: number;
+  overlap: number;
   onChange: (key: string, val: number) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -114,26 +112,30 @@ function AdvancedParams({
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-[var(--dc-muted)] hover:text-[var(--dc-text)] hover:bg-[rgba(255,255,255,0.02)] transition-colors"
       >
-        <span className="flex items-center gap-2"><SlidersHorizontal className="w-3.5 h-3.5" /> Engine Parameters</span>
+        <span className="flex items-center gap-2"><SlidersHorizontal className="w-3.5 h-3.5" /> Engine Parameters (Quality vs Speed)</span>
         <ChevronDown className={clsx("w-4 h-4 transition-transform duration-300", open && "rotate-180")} />
       </button>
       <AnimatePresence>
         {open && (
           <motion.div
             initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="grid grid-cols-1 sm:grid-cols-3 gap-5 px-5 pb-5 border-t border-[rgba(255,255,255,0.05)] pt-4"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-5 px-5 pb-5 border-t border-[rgba(255,255,255,0.05)] pt-4"
           >
             <label className="space-y-1.5 flex flex-col">
-              <span className="text-[10px] font-black tracking-widest uppercase text-[var(--dc-muted)]">Guidance Scale</span>
-              <input type="number" min={0} max={20} step={0.5} value={guidanceScale} onChange={(e) => onChange("guidanceScale", Number(e.target.value))} className="w-full rounded-xl border border-[var(--dc-border)] bg-[var(--dc-input)] px-4 py-2 text-sm font-mono text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--dc-accent)] transition-shadow" />
+              <span className="text-[10px] font-black tracking-widest uppercase text-[var(--dc-muted)] flex justify-between">
+                <span>Shifts (Quality Multiplier)</span>
+                <span>{shifts}x</span>
+              </span>
+              <p className="text-[10px] text-[var(--dc-muted2)] leading-tight mb-2">Higher shifts drastically improve quality by averaging multiple predictions to cancel phase artifacts, but linearly increase separation time (1 shift = ~45s, 10 shifts = ~8m).</p>
+              <input type="range" min={1} max={10} step={1} value={shifts} onChange={(e) => onChange("shifts", Number(e.target.value))} className="w-full h-1.5 bg-[var(--dc-border)] rounded-full appearance-none accent-[var(--dc-accent)]" />
             </label>
             <label className="space-y-1.5 flex flex-col">
-              <span className="text-[10px] font-black tracking-widest uppercase text-[var(--dc-muted)]">Inference Steps</span>
-              <input type="number" min={1} max={100} value={numSteps} onChange={(e) => onChange("numSteps", Number(e.target.value))} className="w-full rounded-xl border border-[var(--dc-border)] bg-[var(--dc-input)] px-4 py-2 text-sm font-mono text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--dc-accent)] transition-shadow" />
-            </label>
-            <label className="space-y-1.5 flex flex-col">
-              <span className="text-[10px] font-black tracking-widest uppercase text-[var(--dc-muted)]">Reranking</span>
-              <input type="number" min={1} max={8} value={rerankingCandidates} onChange={(e) => onChange("rerankingCandidates", Number(e.target.value))} className="w-full rounded-xl border border-[var(--dc-border)] bg-[var(--dc-input)] px-4 py-2 text-sm font-mono text-[var(--dc-text)] focus:border-[var(--dc-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--dc-accent)] transition-shadow" />
+              <span className="text-[10px] font-black tracking-widest uppercase text-[var(--dc-muted)] flex justify-between">
+                <span>Overlap</span>
+                <span>{overlap}</span>
+              </span>
+              <p className="text-[10px] text-[var(--dc-muted2)] leading-tight mb-2">Amount of overlap between prediction windows. Higher values (0.25) prevent clicks and popping at chunk boundaries.</p>
+              <input type="range" min={0.1} max={0.9} step={0.05} value={overlap} onChange={(e) => onChange("overlap", Number(e.target.value))} className="w-full h-1.5 bg-[var(--dc-border)] rounded-full appearance-none accent-[var(--dc-accent)]" />
             </label>
           </motion.div>
         )}
@@ -160,9 +162,8 @@ export default function SegmentPage() {
 
   const [prompt, setPrompt] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [guidanceScale, setGuidanceScale] = useState(3.0);
-  const [numSteps, setNumSteps] = useState(16);
-  const [rerankingCandidates, setRerankingCandidates] = useState(1);
+  const [shifts, setShifts] = useState(10);
+  const [overlap, setOverlap] = useState(0.25);
   const [selectedCats, setSelectedCats] = useState<Set<string>>(
     () => new Set(SEGMENT_CATEGORIES.map((c) => c.label))
   );
@@ -170,46 +171,23 @@ export default function SegmentPage() {
   // SSE for auto-segment progress
   useSegmentSSE(jobId);
 
-  const handleUploadAndSegment = useCallback(async (file: File) => {
+  const handleUpload = useCallback(async (file: File) => {
     setUploading(true);
     setError(null);
-    let sessionRes;
 
     // 1. Upload File
     try {
-      sessionRes = await api.uploadAudio(file);
+      const sessionRes = await api.uploadAudio(file);
       setSession(sessionRes);
       toast.success(`Uploaded: ${sessionRes.filename}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Upload failed";
       setError(msg);
       toast.error(msg);
+    } finally {
       setUploading(false);
-      return;
     }
-
-    setUploading(false);
-
-    // 2. Automatically Start Segmentation (Default to all categories)
-    setProcessing(true);
-    setError(null);
-    try {
-      const res = await api.autoSegment({
-        session_id: sessionRes.id,
-        categories: undefined, // undefined = use all defaults on backend
-        guidance_scale: guidanceScale,
-        num_steps: numSteps,
-        reranking_candidates: rerankingCandidates,
-      });
-      setJobId(res.job_id);
-      toast.success("Stem separation started");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Auto-segment failed";
-      setError(msg);
-      toast.error(msg);
-      setProcessing(false);
-    }
-  }, [setSession, setError, guidanceScale, numSteps, rerankingCandidates, setJobId, setProcessing]);
+  }, [setSession, setError]);
 
   const handleDescribe = useCallback(async () => {
     if (!session || !prompt.trim()) return;
@@ -219,9 +197,8 @@ export default function SegmentPage() {
       const res = await api.separateAudio({
         session_id: session.id,
         prompt: prompt.trim(),
-        guidance_scale: guidanceScale,
-        num_steps: numSteps,
-        reranking_candidates: rerankingCandidates,
+        shifts,
+        overlap,
       });
       addSegment(res.segment);
       toast.success(`Isolated: ${prompt.trim()}`);
@@ -233,7 +210,7 @@ export default function SegmentPage() {
     } finally {
       setProcessing(false);
     }
-  }, [session, prompt, guidanceScale, numSteps, rerankingCandidates, addSegment, setProcessing, setError]);
+  }, [session, prompt, shifts, overlap, addSegment, setProcessing, setError]);
 
   const handleAutoSegment = useCallback(async () => {
     if (!session) return;
@@ -246,9 +223,8 @@ export default function SegmentPage() {
       const res = await api.autoSegment({
         session_id: session.id,
         categories: cats,
-        guidance_scale: guidanceScale,
-        num_steps: numSteps,
-        reranking_candidates: rerankingCandidates,
+        shifts,
+        overlap,
       });
       setJobId(res.job_id);
     } catch (e) {
@@ -257,7 +233,7 @@ export default function SegmentPage() {
       toast.error(msg);
       setProcessing(false); // only reset on error since SSE handles success
     }
-  }, [session, selectedCats, guidanceScale, numSteps, rerankingCandidates, setJobId, setError, setProcessing]);
+  }, [session, selectedCats, shifts, overlap, setJobId, setError, setProcessing]);
 
   const handleNewFile = useCallback(() => {
     if (session) {
@@ -267,9 +243,8 @@ export default function SegmentPage() {
   }, [session]);
 
   const handleParamChange = (key: string, val: number) => {
-    if (key === "guidanceScale") setGuidanceScale(val);
-    if (key === "numSteps") setNumSteps(val);
-    if (key === "rerankingCandidates") setRerankingCandidates(val);
+    if (key === "shifts") setShifts(val);
+    if (key === "overlap") setOverlap(val);
   };
 
   const toggleCategory = (label: string) => {

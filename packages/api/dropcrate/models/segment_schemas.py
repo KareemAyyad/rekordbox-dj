@@ -6,17 +6,15 @@ from pydantic import BaseModel, Field
 class SeparateRequest(BaseModel):
     session_id: str
     prompt: str = Field(..., min_length=1, max_length=500)
-    guidance_scale: float = Field(default=3.0, ge=0.0, le=20.0)
-    num_steps: int = Field(default=16, ge=1, le=100)
-    reranking_candidates: int = Field(default=1, ge=1, le=8)
+    shifts: int = Field(default=10, ge=1, le=20)
+    overlap: float = Field(default=0.25, ge=0.0, le=0.99)
 
 
 class AutoSegmentRequest(BaseModel):
     session_id: str
     categories: list[str] | None = None  # None = use all defaults
-    guidance_scale: float = Field(default=3.0, ge=0.0, le=20.0)
-    num_steps: int = Field(default=16, ge=1, le=100)
-    reranking_candidates: int = Field(default=1, ge=1, le=8)
+    shifts: int = Field(default=10, ge=1, le=20)
+    overlap: float = Field(default=0.25, ge=0.0, le=0.99)
 
 
 class SegmentResult(BaseModel):

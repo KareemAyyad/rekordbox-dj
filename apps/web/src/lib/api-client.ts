@@ -134,9 +134,8 @@ export const api = {
   separateAudio: async (params: {
     session_id: string;
     prompt: string;
-    guidance_scale?: number;
-    num_steps?: number;
-    reranking_candidates?: number;
+    shifts?: number;
+    overlap?: number;
   }): Promise<{ ok: boolean; segment: SegmentItem }> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = await apiFetch<any>("/api/segment/separate", {
@@ -149,9 +148,8 @@ export const api = {
   autoSegment: (params: {
     session_id: string;
     categories?: string[];
-    guidance_scale?: number;
-    num_steps?: number;
-    reranking_candidates?: number;
+    shifts?: number;
+    overlap?: number;
   }) =>
     apiFetch<{ ok: boolean; job_id: string }>("/api/segment/auto", {
       method: "POST",

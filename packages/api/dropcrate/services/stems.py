@@ -49,6 +49,27 @@ def _get_device() -> str:
     return "cpu"
 
 
+async def separate_audio(
+    input_file: str, 
+    output_dir: str, 
+    shifts: int = 10,
+    overlap: float = 0.25,
+) -> dict[str, str]:
+    """Separate audio into stems. Returns a dict mapping stem name to file path."""
+    in_path = Path(input_file)
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Starting separation for {in_path.name}")
+    try:
+        if _TORCH_AVAILABLE:
+            return await _separate_local(in_path, out_path)
+        return await _separate_replicate(in_path, out_path, shifts, overlap)
+    except Exception as e:
+        logger.error(f"Separation failed: {e}", exc_info=True)
+        raise RuntimeError(f"Failed to separate audio: {e}")
+
+
 async def _separate_local(input_path: Path, out_path: Path) -> dict[str, str]:
     """Use local PyTorch Demucs for separation (dev/Apple Silicon)."""
     device = _get_device()
@@ -67,25 +88,20 @@ async def _separate_local(input_path: Path, out_path: Path) -> dict[str, str]:
     return await asyncio.to_thread(_run)
 
 
-async def _separate_replicate(input_path: Path, out_path: Path) -> dict[str, str]:
-    """Use Replicate's hosted htdemucs_ft GPU for separation via direct HTTP.
-
-    This bypasses the official `replicate` Python SDK entirely to avoid
-    its Pydantic V1/V2 conflict that crashes our FastAPI (Pydantic V2) app.
-
-    Pipeline:
-        1. Upload audio file to Replicate's file hosting
-        2. Create a prediction with ryan5453/demucs (htdemucs_ft, A100 GPU)
-        3. Poll until succeeded/failed (with exponential backoff)
-        4. Download the 4 separated WAV stems
-    """
+async def _separate_replicate(
+    input_path: Path, 
+    out_path: Path,
+    shifts: int,
+    overlap: float,
+) -> dict[str, str]:
+    """Use Replicate's hosted htdemucs_ft GPU for separation via direct HTTP."""
     token = getattr(config, "REPLICATE_API_TOKEN", "")
     if not token:
         raise RuntimeError("REPLICATE_API_TOKEN is not set — cannot run cloud stem separation.")
 
     headers = {"Authorization": f"Token {token}"}
     file_size_mb = input_path.stat().st_size / (1024 * 1024)
-    logger.info(f"[Demucs Replicate] Starting separation for {input_path.name} ({file_size_mb:.1f} MB)")
+    logger.info(f"[Demucs Replicate] Starting separation for {input_path.name} ({file_size_mb:.1f} MB, shifts={shifts}, overlap={overlap})")
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=30)) as client:
         # ── Step 1: Upload the audio file ──────────────────────────────
@@ -100,7 +116,7 @@ async def _separate_replicate(input_path: Path, out_path: Path) -> dict[str, str
         logger.info(f"[Demucs Replicate] Upload complete → {file_url[:80]}...")
 
         # ── Step 2: Create prediction ──────────────────────────────────
-        logger.info("[Demucs Replicate] Step 2/4: Creating prediction (htdemucs_ft on A100)...")
+        logger.info(f"[Demucs Replicate] Step 2/4: Creating prediction (htdemucs_ft on A100, shifts={shifts}, overlap={overlap})...")
         pred_resp = await client.post(
             f"{_REPLICATE_API}/predictions",
             headers={**headers, "Content-Type": "application/json"},
@@ -112,8 +128,8 @@ async def _separate_replicate(input_path: Path, out_path: Path) -> dict[str, str
                     "stem": "none",
                     "output_format": "wav",
                     "clip_mode": "rescale",
-                    "shifts": 10,  # Maximize quality using the shift trick (averages 10 predictions)
-                    "overlap": 0.25,  # Better handling of window boundaries
+                    "shifts": shifts,
+                    "overlap": overlap,
                 },
             },
         )
