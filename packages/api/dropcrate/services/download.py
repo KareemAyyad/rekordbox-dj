@@ -31,6 +31,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "3",
+        "--force-ipv4",
         "--extractor-args", "youtube:player_client=ios,android,tv",
         "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
@@ -68,11 +69,13 @@ def _sync_download(url: str, work_dir: Path) -> Path:
     logger.info("[yt-dlp download] Retrying with relaxed format...")
     cmd_retry = [
         "yt-dlp",
-        "--format", "bestaudio/best",
-        "--output", outtmpl,
-        "--no-playlist",
+        # We want best audio, ignoring video, preferring m4a/mp3 if available
+        "-f", "bestaudio[ext=m4a]/bestaudio/best",
+        # Output path
+        "-o", str(outtmpl), # Changed from output_path to outtmpl
         "--socket-timeout", "30",
         "--retries", "3",
+        "--force-ipv4",
         "--extractor-args", "youtube:player_client=ios,android,tv",
         "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
