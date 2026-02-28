@@ -1,17 +1,22 @@
-"""Demucs local offline audio separation service.
+"""Demucs stem separation service — dual-path architecture.
 
-This module is OPTIONAL — it requires torch, torchaudio, and demucs.
-On cloud deployments without these packages, the segment router falls back
-to the RunPod/SAM-Audio backend instead.
+Cloud: Uses Replicate's hosted htdemucs GPU instances (~$0.02/track, ~30s).
+Local: Uses PyTorch Demucs directly on Apple Silicon (if torch is installed).
 """
 
-import logging
 import asyncio
+import logging
 from pathlib import Path
+
+import httpx
+
+from dropcrate import config
 
 logger = logging.getLogger(__name__)
 
-# Lazy-check for torch availability
+# ---------------------------------------------------------------------------
+# Check for local PyTorch availability (dev machines with torch installed)
+# ---------------------------------------------------------------------------
 _TORCH_AVAILABLE = False
 try:
     import torch
@@ -19,16 +24,16 @@ try:
     from demucs.api import Separator, save_audio
     _TORCH_AVAILABLE = True
 except ImportError:
-    logger.info("PyTorch/Demucs not installed — local stems disabled, using RunPod fallback.")
+    pass
 
 
 def is_available() -> bool:
-    """Check if the local Demucs engine is available."""
-    return _TORCH_AVAILABLE
+    """Check if ANY stem separation backend is available."""
+    return _TORCH_AVAILABLE or bool(getattr(config, "REPLICATE_API_TOKEN", ""))
 
 
 def _get_device() -> str:
-    """Detect the best available PyTorch device."""
+    """Detect the best available PyTorch device (local only)."""
     if torch.backends.mps.is_available():
         return "mps"
     elif torch.cuda.is_available():
@@ -36,38 +41,79 @@ def _get_device() -> str:
     return "cpu"
 
 
+async def _separate_local(input_path: Path, out_path: Path) -> dict[str, str]:
+    """Use local PyTorch Demucs for separation (dev/Apple Silicon)."""
+    device = _get_device()
+    logger.info(f"[Demucs Local] Separating on device: {device}")
+
+    def _run():
+        separator = Separator(model="htdemucs", device=device)
+        _, res = separator.separate_audio_file(str(input_path))
+        saved = {}
+        for stem_name, tensor in res.items():
+            stem_file = out_path / f"{stem_name}.wav"
+            save_audio(tensor, str(stem_file), samplerate=separator.samplerate)
+            saved[stem_name] = str(stem_file)
+        return saved
+
+    return await asyncio.to_thread(_run)
+
+
+async def _separate_replicate(input_path: Path, out_path: Path) -> dict[str, str]:
+    """Use Replicate's hosted htdemucs GPU for separation (cloud)."""
+    import replicate
+
+    logger.info(f"[Demucs Replicate] Uploading {input_path.name} for GPU separation...")
+
+    # Run Demucs on Replicate's GPU
+    def _run():
+        with open(input_path, "rb") as f:
+            output = replicate.run(
+                "cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81571f6c6c65f1b6",
+                input={
+                    "audio": f,
+                    "model_name": "htdemucs",
+                    "stem": "all",
+                    "output_format": "wav",
+                },
+            )
+        return output
+
+    output = await asyncio.to_thread(_run)
+
+    # Download the separated stems from Replicate's output URLs
+    saved = {}
+    async with httpx.AsyncClient(timeout=120) as client:
+        for stem_name, url in output.items():
+            if not isinstance(url, str) or not url.startswith("http"):
+                continue
+            stem_file = out_path / f"{stem_name}.wav"
+            logger.info(f"[Demucs Replicate] Downloading {stem_name} stem...")
+            resp = await client.get(url)
+            resp.raise_for_status()
+            stem_file.write_bytes(resp.content)
+            saved[stem_name] = str(stem_file)
+
+    logger.info(f"[Demucs Replicate] Completed: {len(saved)} stems.")
+    return saved
+
+
 async def separate_audio(input_file: str, output_dir: str) -> dict[str, str]:
-    """Separate an audio file into 4 stems using local Demucs.
+    """Separate an audio file into 4 stems. Auto-selects backend.
 
-    Returns a dict mapping stem name to its absolute file path.
-    Raises RuntimeError if torch is not available.
+    Returns a dict mapping stem name -> absolute file path.
     """
-    if not _TORCH_AVAILABLE:
-        raise RuntimeError("Local Demucs engine is not available. Install torch, torchaudio, and demucs.")
-
     input_path = Path(input_file)
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
-    device = _get_device()
-    logger.info(f"Starting Demucs separation on device: {device}")
-
-    def _run_demucs():
-        separator = Separator(model="htdemucs", device=device)
-        origin, res = separator.separate_audio_file(str(input_path))
-
-        saved_paths = {}
-        for stem_name, stem_tensor in res.items():
-            stem_file = out_path / f"{stem_name}.wav"
-            save_audio(stem_tensor, str(stem_file), samplerate=separator.samplerate)
-            saved_paths[stem_name] = str(stem_file)
-
-        return saved_paths
-
-    try:
-        paths = await asyncio.to_thread(_run_demucs)
-        logger.info(f"Successfully separated {input_path.name} into {len(paths)} stems.")
-        return paths
-    except Exception as e:
-        logger.error(f"Demucs separation failed for {input_path.name}: {e}")
-        raise RuntimeError(f"Demucs separation failed: {e}")
+    if _TORCH_AVAILABLE:
+        return await _separate_local(input_path, out_path)
+    elif getattr(config, "REPLICATE_API_TOKEN", ""):
+        return await _separate_replicate(input_path, out_path)
+    else:
+        raise RuntimeError(
+            "No stem separation backend available. "
+            "Set REPLICATE_API_TOKEN for cloud GPU inference, "
+            "or install torch/demucs for local inference."
+        )

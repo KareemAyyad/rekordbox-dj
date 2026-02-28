@@ -18,8 +18,10 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "socket_timeout": 10,
-        "retries": 1,
+        "socket_timeout": 30,
+        "retries": 3,
+        # Use iOS/mweb player clients to bypass YouTube bot detection on cloud servers
+        "extractor_args": {"youtube": {"player_client": ["ios", "mweb"]}},
     }
     opts.update(config.get_ytdlp_auth_opts())
 

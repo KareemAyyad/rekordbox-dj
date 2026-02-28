@@ -65,5 +65,8 @@ SAM_AUDIO_MODEL = _env("SAM_AUDIO_MODEL", "facebook/sam-audio-base")
 RUNPOD_API_KEY = _env("RUNPOD_API_KEY")
 RUNPOD_ENDPOINT_ID = _env("RUNPOD_ENDPOINT_ID")
 
+# Replicate (hosted GPU Demucs stem separation)
+REPLICATE_API_TOKEN = _env("REPLICATE_API_TOKEN")
+
 # Static files (Next.js build output served in production)
 STATIC_DIR = Path(_env("DROPCRATE_STATIC_DIR", "./static"))
