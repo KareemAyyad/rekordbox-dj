@@ -25,8 +25,14 @@ def _sync_fetch_info(url: str) -> dict:
         "--retries", "2",
         "--extractor-args", "youtube:player_client=ios,android,tv",
         "--remote-components", "ejs:github",
-        url,
     ]
+
+    from dropcrate import config
+    cookies_file = config.get_cookies_file()
+    if cookies_file:
+        cmd.extend(["--cookies", cookies_file])
+        
+    cmd.append(url)
 
     logger.info(f"[yt-dlp metadata] Running: {' '.join(cmd[:6])}... {url}")
 
@@ -50,7 +56,7 @@ def _sync_fetch_info(url: str) -> dict:
 
         # If the first attempt failed, try with verbose to see plugin status
         logger.info("[yt-dlp metadata] Retrying with verbose output for diagnostics...")
-        cmd_v = cmd + ["--verbose"]
+        cmd_v = cmd[:-1] + ["--verbose", url]  # URL must be last
         result_v = subprocess.run(
             cmd_v,
             capture_output=True,
