@@ -64,7 +64,14 @@ async def separate_audio(
     try:
         if _TORCH_AVAILABLE:
             return await _separate_local(in_path, out_path)
-        return await _separate_replicate(in_path, out_path, shifts, overlap)
+        elif getattr(config, "REPLICATE_API_TOKEN", ""):
+            return await _separate_replicate(in_path, out_path, shifts, overlap)
+        else:
+            raise RuntimeError(
+                "No stem separation backend available. "
+                "Set REPLICATE_API_TOKEN for cloud GPU inference, "
+                "or install torch/demucs for local inference."
+            )
     except Exception as e:
         logger.error(f"Separation failed: {e}", exc_info=True)
         raise RuntimeError(f"Failed to separate audio: {e}")
@@ -200,22 +207,4 @@ async def _separate_replicate(
     return saved
 
 
-async def separate_audio(input_file: str, output_dir: str) -> dict[str, str]:
-    """Separate an audio file into 4 stems. Auto-selects backend.
 
-    Returns a dict mapping stem name -> absolute file path.
-    """
-    input_path = Path(input_file)
-    out_path = Path(output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
-
-    if _TORCH_AVAILABLE:
-        return await _separate_local(input_path, out_path)
-    elif getattr(config, "REPLICATE_API_TOKEN", ""):
-        return await _separate_replicate(input_path, out_path)
-    else:
-        raise RuntimeError(
-            "No stem separation backend available. "
-            "Set REPLICATE_API_TOKEN for cloud GPU inference, "
-            "or install torch/demucs for local inference."
-        )
