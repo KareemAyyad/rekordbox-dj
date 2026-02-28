@@ -491,12 +491,8 @@ export default function QueuePage() {
           </motion.div>
 
           {/* ... keeping other sidebar items clean & minimal */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="dc-glass rounded-2xl p-5 hover:dc-glass-strong transition-all">
-            <h3 className="text-xs font-black tracking-widest text-[var(--dc-text)] uppercase mb-2">Output Dir</h3>
-            <p className="truncate text-xs text-[var(--dc-accent-light)] font-mono bg-[rgba(0,0,0,0.3)] px-2 py-1 rounded inline-block">
-              {settings.inbox_dir}
-            </p>
-          </motion.div>
+
+
 
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="dc-glass rounded-2xl p-5 hover:dc-glass-strong transition-all">
             <h3 className="text-xs font-black tracking-widest text-[var(--dc-text)] uppercase mb-2">Mode</h3>
