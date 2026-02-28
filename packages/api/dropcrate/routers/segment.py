@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Query, UploadFile, File
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -27,6 +29,7 @@ from dropcrate.services.sam_audio import (
 from dropcrate.services import stems
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Dedicated job manager for segment SSE events
 segment_job_manager = JobManager()
@@ -136,16 +139,23 @@ async def auto_segment(req: AutoSegmentRequest):
     async def _run():
         try:
             if stems.is_available():
-                segment_job_manager.broadcast(job, {"type": "auto-start", "total": 4})
+                # Replicate separates all 4 stems in ONE prediction call
+                segment_job_manager.broadcast(job, {"type": "auto-start", "total": 2})
                 segment_job_manager.broadcast(job, {"type": "model-loading"})
                 segment_job_manager.broadcast(job, {"type": "model-ready"})
                 segment_job_manager.broadcast(job, {
                     "type": "segment-start",
-                    "label": "Vocals, Drums, Bass, Other",
-                    "index": 1, "total": 4,
+                    "label": "Separating all stems via AI (this takes ~30-120s)...",
+                    "index": 0, "total": 2,
                 })
 
                 results = await stems.separate_audio(str(audio_path), str(session_dir))
+
+                segment_job_manager.broadcast(job, {
+                    "type": "segment-start",
+                    "label": f"Complete — {len(results)} stems extracted",
+                    "index": 1, "total": 2,
+                })
 
                 segments = []
                 for stem_name, stem_path in results.items():
