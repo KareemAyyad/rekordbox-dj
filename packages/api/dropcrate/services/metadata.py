@@ -23,7 +23,7 @@ def _sync_fetch_info(url: str) -> dict:
         "--no-playlist",
         "--socket-timeout", "15",
         "--retries", "2",
-        "--extractor-args", "youtube:player_client=android",
+        "--extractor-args", "youtube:player_client=ios,android,tv",
         url,
     ]
 
