@@ -22,10 +22,28 @@ def _get_ydl_opts() -> dict:
     return opts
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 def _sync_fetch_info(url: str) -> dict:
     opts = _get_ydl_opts()
     opts["skip_download"] = True
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if info is None:
+                raise RuntimeError(f"yt-dlp returned no info for {url}")
+            return ydl.sanitize_info(info)  # type: ignore[return-value]
+    except Exception as first_err:
+        logger.warning(f"[yt-dlp metadata] First attempt failed: {first_err}")
+    
+    # Fallback: try with web_creator client
+    logger.info("[yt-dlp metadata] Retrying with web_creator client...")
+    fallback_opts = opts.copy()
+    fallback_opts["extractor_args"] = {"youtube": {"player_client": ["web_creator"]}}
+    
+    with yt_dlp.YoutubeDL(fallback_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         if info is None:
             raise RuntimeError(f"yt-dlp returned no info for {url}")
