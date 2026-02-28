@@ -19,9 +19,11 @@ FROM python:3.12-slim
 # Install ffmpeg + fpcalc + libsndfile + git + Node.js 20 (for PO token provider)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        ffmpeg curl libchromaprint-tools libsndfile1 git gnupg ca-certificates && \
+    ffmpeg curl libchromaprint-tools libsndfile1 git gnupg ca-certificates unzip && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
+    curl -fsSL https://deno.land/install.sh | sh && \
+    ln -s /root/.deno/bin/deno /usr/local/bin/deno && \
     rm -rf /var/lib/apt/lists/*
 
 # Build bgutil PO token server v1.2.2 (auto-generates YouTube PO tokens for yt-dlp)

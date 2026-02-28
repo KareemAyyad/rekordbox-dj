@@ -28,12 +28,6 @@ def _sync_fetch_info(url: str) -> dict:
         "--remote-components", "ejs:github",
     ]
 
-    import subprocess as sp
-    node_v = sp.getoutput('node -v')
-    which_node = sp.getoutput('which node')
-    env_path = sp.getoutput('echo $PATH')
-    raise RuntimeError(f"DEBUG_NODE: v='{node_v}', which='{which_node}', path='{env_path}'")
-
     from dropcrate import config
     cookies_file = config.get_cookies_file()
     if cookies_file:
