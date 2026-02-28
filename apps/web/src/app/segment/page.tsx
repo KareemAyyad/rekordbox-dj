@@ -371,17 +371,46 @@ export default function SegmentPage() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2 opacity-50 pointer-events-none">
-                    {SEGMENT_CATEGORIES.map((cat) => (
-                      <div
-                        key={cat.label}
-                        className="rounded-full px-3 py-1 text-xs font-medium bg-[var(--dc-accent)] text-white"
-                      >
-                        {cat.label}
-                      </div>
-                    ))}
+                <div className="space-y-4">
+                  <p className="text-xs font-medium text-[var(--dc-muted)]">Select which stems to extract, then start separation:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SEGMENT_CATEGORIES.map((cat) => {
+                      const isSelected = selectedCats.has(cat.label);
+                      return (
+                        <button
+                          key={cat.label}
+                          onClick={() => toggleCategory(cat.label)}
+                          disabled={processing}
+                          className={clsx(
+                            "rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-200",
+                            isSelected
+                              ? "bg-[var(--dc-accent)] text-white shadow-[0_0_10px_var(--dc-accent-ring)]"
+                              : "bg-[var(--dc-chip)] text-[var(--dc-muted)] border border-[var(--dc-border)] hover:border-[var(--dc-accent)] hover:text-[var(--dc-text)]",
+                            processing && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          {cat.label}
+                        </button>
+                      );
+                    })}
                   </div>
+                  <button
+                    onClick={handleAutoSegment}
+                    disabled={processing || selectedCats.size === 0}
+                    className="w-full rounded-xl bg-gradient-to-r from-[var(--dc-accent)] to-[#c084fc] py-3 text-sm font-bold text-white hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {processing ? (
+                      <>
+                        <span className="h-4 w-4 dc-animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Separating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Start Auto-Separation ({selectedCats.size} stem{selectedCats.size !== 1 ? 's' : ''})
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
 

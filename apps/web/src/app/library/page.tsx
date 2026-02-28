@@ -142,12 +142,18 @@ export default function LibraryPage() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                api.exportRekordboxXml().catch(() => toast.error("Failed to export XML"));
+              onClick={async () => {
+                try {
+                  toast.info("Generating Rekordbox XML...");
+                  await api.exportRekordboxXml();
+                  toast.success("XML downloaded! Import it into Rekordbox.");
+                } catch {
+                  toast.error("Failed to export XML");
+                }
               }}
               className="flex items-center gap-2 rounded-xl bg-[var(--dc-accent-bg)] border border-[var(--dc-accent-border)] px-4 py-2 text-xs font-bold uppercase tracking-wider text-[var(--dc-accent-text)] hover:bg-[var(--dc-accent)] hover:text-white transition-colors"
             >
-              Export XML
+              Export Rekordbox XML
             </motion.button>
           )}
           <motion.button

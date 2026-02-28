@@ -304,83 +304,82 @@ export default function QueuePage() {
       {/* Main column */}
       <div className="flex-1 min-w-0 flex flex-col gap-6">
 
-        {/* Massive Glowing Input Area */}
-        {!running && (
-          <motion.div
-            layout
-            className="relative w-full"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          >
-            <div className={clsx(
-              "absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-[var(--dc-accent)] via-[#c084fc] to-[var(--dc-accent)] opacity-20 blur-xl transition-all duration-700",
-              isFocused ? "opacity-40 blur-2xl animate-[dc-shimmer_3s_linear_infinite]" : "opacity-20"
-            )} />
+        {/* URL Input Area — always visible so user can add more tracks */}
+        <motion.div
+          layout
+          className="relative w-full"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        >
+          <div className={clsx(
+            "absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-[var(--dc-accent)] via-[#c084fc] to-[var(--dc-accent)] opacity-20 blur-xl transition-all duration-700",
+            isFocused ? "opacity-40 blur-2xl animate-[dc-shimmer_3s_linear_infinite]" : "opacity-20"
+          )} />
 
-            <div className={clsx(
-              "relative dc-glass-strong rounded-[2rem] overflow-hidden transition-all duration-500",
-              isFocused ? "border-[var(--dc-accent-light)] shadow-[0_0_30px_var(--dc-accent-bg)]" : ""
-            )}>
-              <textarea
-                ref={inputRef}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleAddItems();
-                  }
-                }}
-                placeholder="Paste YouTube track URLs here..."
-                rows={Math.max(3, Math.min(6, inputText.split('\n').length))}
-                className="w-full resize-none bg-transparent px-8 py-8 text-lg text-[var(--dc-text)] placeholder-[var(--dc-muted2)] focus:outline-none transition-all placeholder:text-xl font-medium"
-              />
+          <div className={clsx(
+            "relative dc-glass-strong rounded-[2rem] overflow-hidden transition-all duration-500",
+            isFocused ? "border-[var(--dc-accent-light)] shadow-[0_0_30px_var(--dc-accent-bg)]" : ""
+          )}>
+            <textarea
+              ref={inputRef}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAddItems();
+                }
+              }}
+              placeholder="Paste YouTube track URLs here..."
+              rows={Math.max(3, Math.min(6, inputText.split('\n').length))}
+              className="w-full resize-none bg-transparent px-8 py-8 text-lg text-[var(--dc-text)] placeholder-[var(--dc-muted2)] focus:outline-none transition-all placeholder:text-xl font-medium"
+            />
 
-              <div className="px-6 py-4 border-t border-[var(--dc-border)] bg-[rgba(0,0,0,0.2)] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {inputText.trim().length > 0 ? (
-                    detectedUrls.length > 0 ? (
-                      <div className="flex items-center gap-2 text-[var(--dc-success-text)] font-semibold text-sm">
-                        <CheckCircle2 className="w-5 h-5" />
-                        <span>Ready to add {detectedUrls.length} track{detectedUrls.length > 1 ? 's' : ''}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-[var(--dc-danger-text)] font-semibold text-sm">
-                        <AlertCircle className="w-5 h-5" />
-                        <span>Invalid YouTube track URL</span>
-                      </div>
-                    )
+            <div className="px-6 py-4 border-t border-[var(--dc-border)] bg-[rgba(0,0,0,0.2)] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {inputText.trim().length > 0 ? (
+                  detectedUrls.length > 0 ? (
+                    <div className="flex items-center gap-2 text-[var(--dc-success-text)] font-semibold text-sm">
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>Ready to add {detectedUrls.length} track{detectedUrls.length > 1 ? 's' : ''}</span>
+                    </div>
                   ) : (
-                    <span className="text-xs font-medium text-[var(--dc-muted)] uppercase tracking-widest flex items-center gap-1.5"><Music className="w-4 h-4" /> Drop tracks to begin</span>
-                  )}
-                </div>
-
-                <AnimatePresence>
-                  {inputText.trim().length > 0 && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      onClick={handleAddItems}
-                      disabled={detectedUrls.length === 0}
-                      className={clsx(
-                        "rounded-full px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all",
-                        detectedUrls.length > 0
-                          ? "bg-[var(--dc-accent)] hover:bg-[var(--dc-accent-light)] shadow-[0_4px_20px_var(--dc-accent-bg)]"
-                          : "bg-[var(--dc-chip)] text-[var(--dc-muted)] cursor-not-allowed shadow-none"
-                      )}
-                    >
-                      {detectedUrls.length > 0 ? "Add to Queue (Enter)" : "Invalid Link"}
-                    </motion.button>
-                  )}
-                </AnimatePresence>
+                    <div className="flex items-center gap-2 text-[var(--dc-danger-text)] font-semibold text-sm">
+                      <AlertCircle className="w-5 h-5" />
+                      <span>Invalid YouTube track URL</span>
+                    </div>
+                  )
+                ) : (
+                  <span className="text-xs font-medium text-[var(--dc-muted)] uppercase tracking-widest flex items-center gap-1.5"><Music className="w-4 h-4" /> Drop tracks to begin</span>
+                )}
               </div>
+
+              <AnimatePresence>
+                {inputText.trim().length > 0 && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    onClick={handleAddItems}
+                    disabled={detectedUrls.length === 0}
+                    className={clsx(
+                      "rounded-full px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all",
+                      detectedUrls.length > 0
+                        ? "bg-[var(--dc-accent)] hover:bg-[var(--dc-accent-light)] shadow-[0_4px_20px_var(--dc-accent-bg)]"
+                        : "bg-[var(--dc-chip)] text-[var(--dc-muted)] cursor-not-allowed shadow-none"
+                    )}
+                  >
+                    {detectedUrls.length > 0 ? "Add to Queue (Enter)" : "Invalid Link"}
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
-          </motion.div>
-        )}
+          </div>
+        </motion.div>
+
 
         {/* Action Bar (When items exist) */}
         {items.length > 0 && (
