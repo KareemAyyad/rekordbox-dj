@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _REPLICATE_API = "https://api.replicate.com/v1"
 _REPLICATE_MODEL_VERSION = "5a7041cc9b82e5a558fea6b3d7b12dea89625e89da33f0447bd727c2d0ab9e77"
-_REPLICATE_MAX_POLL_SECONDS = 300  # 5 minute max for htdemucs_ft on long tracks
+_REPLICATE_MAX_POLL_SECONDS = 900  # 15 minute max for 10-shift high-quality model
 
 # ---------------------------------------------------------------------------
 # Check for local PyTorch availability (dev machines with torch installed)
@@ -112,7 +112,8 @@ async def _separate_replicate(input_path: Path, out_path: Path) -> dict[str, str
                     "stem": "none",
                     "output_format": "wav",
                     "clip_mode": "rescale",
-                    "shifts": 1,
+                    "shifts": 10,  # Maximize quality using the shift trick (averages 10 predictions)
+                    "overlap": 0.25,  # Better handling of window boundaries
                 },
             },
         )
