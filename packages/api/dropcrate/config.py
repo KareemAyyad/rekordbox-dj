@@ -44,17 +44,35 @@ def get_cookies_file() -> str:
 
 
 def get_ytdlp_auth_opts() -> dict:
-    """Return yt-dlp auth options. Priority: browser cookies > cookies file > nothing.
+    """Return yt-dlp auth options.
 
-    PO tokens are handled automatically by bgutil-ytdlp-pot-provider plugin —
-    no explicit config needed here.
+    Priority: browser cookies > cookies file > PO Token provider.
+    Always includes extractor_args for bgutil PO token HTTP server.
     """
+    opts: dict = {}
+    
     if COOKIES_FROM_BROWSER:
-        return {"cookiesfrombrowser": (COOKIES_FROM_BROWSER,)}
-    cookies_file = get_cookies_file()
-    if cookies_file:
-        return {"cookiefile": cookies_file}
-    return {}
+        opts["cookiesfrombrowser"] = (COOKIES_FROM_BROWSER,)
+    else:
+        cookies_file = get_cookies_file()
+        if cookies_file:
+            opts["cookiefile"] = cookies_file
+    
+    # Always configure the bgutil PO token HTTP server (runs on 127.0.0.1:4416 in Docker)
+    # This tells yt-dlp's YouTube extractor to use the PO token provider
+    opts["extractor_args"] = {
+        "youtube": {
+            "player_client": ["web_creator"],
+        },
+        "youtubepot-bgutilhttp": {
+            "base_url": ["http://127.0.0.1:4416"],
+        },
+    }
+    
+    # Enable verbose logging so we can verify PO tokens are being used
+    opts["verbose"] = True
+    
+    return opts
 
 # SAM-Audio
 SEGMENTS_DIR = Path(_env("DROPCRATE_SEGMENTS_DIR", "./data/segments"))
