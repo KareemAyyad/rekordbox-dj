@@ -32,6 +32,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--socket-timeout", "30",
         "--retries", "3",
         "--extractor-args", "youtube:player_client=ios,android,tv",
+        "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
     ]
 
@@ -73,6 +74,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--socket-timeout", "30",
         "--retries", "3",
         "--extractor-args", "youtube:player_client=ios,android,tv",
+        "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
         "--verbose",
     ]
