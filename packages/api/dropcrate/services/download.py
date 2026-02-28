@@ -31,7 +31,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "3",
-        "--extractor-args", "youtube:player_client=web_creator",
+        "--extractor-args", "youtube:player_client=android",
     ]
 
     # Add cookies if available
@@ -71,7 +71,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "3",
-        "--extractor-args", "youtube:player_client=web_creator",
+        "--extractor-args", "youtube:player_client=android",
         "--verbose",
     ]
     if cookies_file:

@@ -62,7 +62,7 @@ def get_ytdlp_auth_opts() -> dict:
     # This tells yt-dlp's YouTube extractor to use the PO token provider
     opts["extractor_args"] = {
         "youtube": {
-            "player_client": ["web_creator"],
+            "player_client": ["android"],
         },
         "youtubepot-bgutilhttp": {
             "base_url": ["http://127.0.0.1:4416"],
