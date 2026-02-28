@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS library_tracks (
     genre TEXT NOT NULL DEFAULT 'Other',
     bpm INTEGER,
     key TEXT,
+    hot_cues TEXT,
     energy TEXT,
     time_slot TEXT,
     vibe TEXT,
@@ -51,6 +52,11 @@ CREATE INDEX IF NOT EXISTS idx_library_title ON library_tracks(title);
 CREATE INDEX IF NOT EXISTS idx_library_genre ON library_tracks(genre);
 """
 
+# Migrations for existing databases (ALTER TABLE is a no-op in schema but needed for live DBs)
+_MIGRATIONS = [
+    "ALTER TABLE library_tracks ADD COLUMN hot_cues TEXT",
+]
+
 
 async def get_db() -> aiosqlite.Connection:
     global _db
@@ -59,6 +65,12 @@ async def get_db() -> aiosqlite.Connection:
         _db = await aiosqlite.connect(str(config.DATABASE_PATH))
         _db.row_factory = aiosqlite.Row
         await _db.executescript(SCHEMA)
+        # Run migrations for existing databases
+        for migration in _MIGRATIONS:
+            try:
+                await _db.execute(migration)
+            except Exception:
+                pass  # Column already exists or migration already applied
         await _db.commit()
     return _db
 
