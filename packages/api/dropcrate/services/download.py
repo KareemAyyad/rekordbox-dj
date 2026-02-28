@@ -50,7 +50,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         cmd,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=1800,
     )
 
     if result.returncode == 0:
@@ -87,7 +87,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         cmd_retry,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=1800,
     )
 
     if result2.returncode == 0:
@@ -116,5 +116,5 @@ async def download_audio(url: str, work_dir: Path) -> Path:
     loop = asyncio.get_event_loop()
     return await asyncio.wait_for(
         loop.run_in_executor(None, _sync_download, url, work_dir),
-        timeout=360,
+        timeout=2000,
     )
