@@ -62,7 +62,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         raise RuntimeError("yt-dlp succeeded but no output file found")
 
     stderr = result.stderr.strip() if result.stderr else "no stderr"
-    logger.warning(f"[yt-dlp download] Failed (exit {result.returncode}): {stderr[:500]}")
+    logger.warning(f"[yt-dlp download] Failed (exit {result.returncode}): {stderr[-1500:]}")
 
     # Retry with relaxed format
     logger.info("[yt-dlp download] Retrying with relaxed format...")
@@ -97,7 +97,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
             return downloaded
 
     stderr2 = result2.stderr.strip() if result2.stderr else "no stderr"
-    raise RuntimeError(f"yt-dlp download failed after retry: {stderr2[:500]}")
+    raise RuntimeError(f"yt-dlp download failed after retry: {stderr2[-1500:]}")
 
 
 def _find_most_recent(directory: Path) -> Path | None:
