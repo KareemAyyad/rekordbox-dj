@@ -22,6 +22,7 @@ from dropcrate.services.sam_audio import (
     DEFAULT_DJ_PROMPTS,
     cleanup_old_sessions,
     get_audio_info,
+    sam_audio_service,
 )
 from dropcrate.services import stems
 
@@ -134,36 +135,75 @@ async def auto_segment(req: AutoSegmentRequest):
 
     async def _run():
         try:
-            # Tell frontend we are processing 4 stems locally
-            segment_job_manager.broadcast(job, {"type": "auto-start", "total": 4})
-            segment_job_manager.broadcast(job, {"type": "model-loading"})
-            
-            # Start Demucs inference
-            segment_job_manager.broadcast(job, {"type": "model-ready"})
-            segment_job_manager.broadcast(job, {
-                "type": "segment-start",
-                "label": "Vocals, Drums, Bass, Other",
-                "index": 1,
-                "total": 4,
-            })
+            if stems.is_available():
+                # === LOCAL DEMUCS PATH ===
+                segment_job_manager.broadcast(job, {"type": "auto-start", "total": 4})
+                segment_job_manager.broadcast(job, {"type": "model-loading"})
+                segment_job_manager.broadcast(job, {"type": "model-ready"})
+                segment_job_manager.broadcast(job, {
+                    "type": "segment-start",
+                    "label": "Vocals, Drums, Bass, Other",
+                    "index": 1, "total": 4,
+                })
 
-            # Run strict local inference
-            results = await stems.separate_audio(str(audio_path), str(session_dir))
+                results = await stems.separate_audio(str(audio_path), str(session_dir))
 
-            segments = []
-            for stem_name, stem_path in results.items():
-                seg = {
-                    "id": str(uuid.uuid4())[:8],
-                    "prompt": f"Isolated {stem_name}",
-                    "label": stem_name.capitalize(),
-                    "target_url": f"/api/segment/stream/{req.session_id}/{stem_name}.wav",
-                    "residual_url": "", # Demucs guarantees isolated multitracks, no residual needed
-                    "duration_seconds": 0, # Not strictly needed by frontend
-                }
-                segments.append(seg)
-                segment_job_manager.broadcast(job, {"type": "segment-done", "segment": seg})
+                segments = []
+                for stem_name, stem_path in results.items():
+                    seg = {
+                        "id": str(uuid.uuid4())[:8],
+                        "prompt": f"Isolated {stem_name}",
+                        "label": stem_name.capitalize(),
+                        "target_url": f"/api/segment/stream/{req.session_id}/{stem_name}.wav",
+                        "residual_url": "",
+                        "duration_seconds": 0,
+                    }
+                    segments.append(seg)
+                    segment_job_manager.broadcast(job, {"type": "segment-done", "segment": seg})
 
-            segment_job_manager.broadcast(job, {"type": "auto-done", "segments": segments})
+                segment_job_manager.broadcast(job, {"type": "auto-done", "segments": segments})
+            else:
+                # === CLOUD RUNPOD/SAM-AUDIO FALLBACK ===
+                total = len(categories or DEFAULT_DJ_PROMPTS)
+                segment_job_manager.broadcast(job, {"type": "auto-start", "total": total})
+
+                if not sam_audio_service.is_loaded:
+                    segment_job_manager.broadcast(job, {"type": "model-loading"})
+                    await sam_audio_service.load_model()
+                    segment_job_manager.broadcast(job, {"type": "model-ready"})
+
+                def progress_cb(label: str, index: int, total: int):
+                    segment_job_manager.broadcast(job, {
+                        "type": "segment-start", "label": label,
+                        "index": index, "total": total,
+                    })
+
+                def error_cb(prompt: str, error: str):
+                    segment_job_manager.broadcast(job, {
+                        "type": "segment-error", "prompt": prompt, "error": error,
+                    })
+
+                results = await sam_audio_service.auto_segment(
+                    session_dir=session_dir, audio_path=audio_path,
+                    categories=categories,
+                    guidance_scale=req.guidance_scale,
+                    num_steps=req.num_steps,
+                    reranking_candidates=req.reranking_candidates,
+                    progress_callback=progress_cb, error_callback=error_cb,
+                )
+
+                segments = []
+                for r in results:
+                    seg = {
+                        "id": r["id"], "prompt": r["prompt"], "label": r["label"],
+                        "target_url": f"/api/segment/stream/{req.session_id}/{r['target_filename']}",
+                        "residual_url": f"/api/segment/stream/{req.session_id}/{r['residual_filename']}",
+                        "duration_seconds": r["duration_seconds"],
+                    }
+                    segments.append(seg)
+                    segment_job_manager.broadcast(job, {"type": "segment-done", "segment": seg})
+
+                segment_job_manager.broadcast(job, {"type": "auto-done", "segments": segments})
         except Exception as e:
             segment_job_manager.broadcast(job, {"type": "auto-error", "error": str(e)})
 

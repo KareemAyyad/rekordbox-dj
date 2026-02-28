@@ -11,14 +11,10 @@ python-multipart>=0.0.12
 # YouTube PO Token auto-authentication (zero user interaction)
 bgutil-ytdlp-pot-provider>=0.7.0
 
-# SAM-Audio — soundfile is always needed; torch/torchaudio only for local mode
+# SAM-Audio — soundfile is always needed
 soundfile>=0.12.0
 
---extra-index-url https://download.pytorch.org/whl/cpu
-numpy<2.0.0
-torch
-torchaudio
-demucs @ git+https://github.com/adefossez/demucs@b9ab48cad45976ba42b2ff17b229c071f0df9390
-
 # Harmonic AI Engine
+numpy<2.0.0
 librosa>=0.10.0
+scipy>=1.10.0
