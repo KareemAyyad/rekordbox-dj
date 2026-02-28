@@ -16,18 +16,18 @@ RUN pnpm --filter @dropcrate/web build
 # Stage 2: Python runtime
 FROM python:3.12-slim
 
-# Install ffmpeg + fpcalc + libsndfile + git + Node.js 18 (for PO token provider)
+# Install ffmpeg + fpcalc + libsndfile + git + Node.js 20 (for PO token provider)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg curl libchromaprint-tools libsndfile1 git gnupg ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Build bgutil PO token server (auto-generates YouTube PO tokens for yt-dlp)
-RUN git clone https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil && \
+# Build bgutil PO token server v1.2.2 (auto-generates YouTube PO tokens for yt-dlp)
+RUN git clone --single-branch --branch 1.2.2 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil && \
     cd /opt/bgutil/server && \
-    npm install && \
+    npm ci && \
     npx tsc
 
 WORKDIR /app

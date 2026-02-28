@@ -2,14 +2,14 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 aiosqlite>=0.20.0
 pydantic>=2.10.0
-yt-dlp>=2024.12.0
+yt-dlp>=2025.05.22
 openai>=1.50.0
 httpx>=0.27.0
 python-dotenv>=1.0.0
 python-multipart>=0.0.12
 
 # YouTube PO Token auto-authentication (zero user interaction)
-bgutil-ytdlp-pot-provider>=0.7.0
+bgutil-ytdlp-pot-provider>=1.2.0
 
 # SAM-Audio — soundfile is always needed
 soundfile>=0.12.0
