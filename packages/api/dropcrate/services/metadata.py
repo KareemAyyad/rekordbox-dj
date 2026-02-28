@@ -43,9 +43,10 @@ def _sync_fetch_info(url: str) -> dict:
             logger.info(f"[yt-dlp metadata] Success: {info.get('title', 'unknown')}")
             return info
 
-        # Log the error for debugging
+        # Log the latest error for debugging
         stderr = result.stderr.strip() if result.stderr else "no stderr"
-        logger.warning(f"[yt-dlp metadata] Failed (exit {result.returncode}): {stderr[:500]}")
+        # Log last 1000 chars where the actual error is usually situated
+        logger.warning(f"[yt-dlp metadata] Failed (exit {result.returncode}): ... {stderr[-1000:]}")
 
         # If the first attempt failed, try with verbose to see plugin status
         logger.info("[yt-dlp metadata] Retrying with verbose output for diagnostics...")
@@ -63,7 +64,8 @@ def _sync_fetch_info(url: str) -> dict:
             return info
 
         stderr_v = result_v.stderr.strip() if result_v.stderr else "no stderr"
-        raise RuntimeError(f"yt-dlp metadata extraction failed: {stderr_v[:500]}")
+        logger.error(f"[yt-dlp metadata] FULL VERBOSE ERROR: {stderr_v}")
+        raise RuntimeError(f"yt-dlp metadata extraction failed: ... {stderr_v[-1500:]}")
 
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"yt-dlp metadata extraction timed out for {url}")
