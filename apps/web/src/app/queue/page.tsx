@@ -188,88 +188,60 @@ export default function QueuePage() {
 
   const detectedUrls = extractYouTubeUrls(inputText);
 
-  // Auto-start pipeline when URLs are detected
-  useEffect(() => {
-    if (detectedUrls.length === 0 || running) return;
+  const handleAddItems = useCallback((e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!inputText.trim()) return;
 
-    const autoStart = async () => {
-      console.log("[Queue] Auto-start triggered. Detected URLs:", detectedUrls);
-      // 1. Add to Queue
-      const defaults: DJTags = { genre: "Other", energy: "", time: "", vibe: "" };
-      addItems(detectedUrls, defaults);
-      setInputText("");
-      console.log("[Queue] Items added to store. Clearing input.");
-
-      // 2. Auto-classify
-      const state = useQueueStore.getState();
-      const newItems = state.items.slice(-detectedUrls.length);
-      const classifyItems = newItems.map((i) => ({ id: i.id, url: i.url }));
-      console.log("[Queue] Starting AI classification for", classifyItems.length, "items");
-
-      for (const ci of classifyItems) {
-        updateItemAuto(ci.id, { status: "running" });
-      }
-
-      // Fire and forget classification
-      api.classify(classifyItems).then((res) => {
-        console.log("[Queue] Classification response:", res);
-        for (const r of res.results) {
-          updateItemAuto(r.id, {
-            status: "done",
-            confidence: r.confidence,
-            notes: r.notes,
-            kind: r.kind,
-          });
-          const store = useQueueStore.getState();
-          const item = store.items.find((i) => i.id === r.id);
-          if (item) {
-            const tags: Partial<DJTags> = {};
-            if (r.genre) tags.genre = r.genre;
-            if (r.energy) tags.energy = r.energy;
-            if (r.time) tags.time = r.time;
-            if (r.vibe) tags.vibe = r.vibe;
-            store.updateItemTags(r.id, tags);
-          }
-        }
-      }).catch((err) => {
-        console.error("[Queue] Classification failed:", err);
-        for (const ci of classifyItems) {
-          updateItemAuto(ci.id, { status: "error" });
-        }
+    if (detectedUrls.length === 0) {
+      toast.error("Invalid YouTube URL", {
+        description: "Please paste a direct video link (e.g., https://youtube.com/watch?v=...)"
       });
+      return;
+    }
 
-      // 3. Immediately Start Engine
-      const currentState = useQueueStore.getState();
-      const queued = currentState.items.filter((i) => i.status === "queued" || i.status === "error");
-      console.log("[Queue] Starting engine with", queued.length, "queued items");
+    // 1. Add to Queue
+    const defaults: DJTags = { genre: "Other", energy: "", time: "", vibe: "" };
+    addItems(detectedUrls, defaults);
+    const addedUrls = [...detectedUrls];
+    setInputText("");
+    toast.success(`Added ${addedUrls.length} track${addedUrls.length > 1 ? 's' : ''} to queue`);
 
-      try {
-        const res = await api.startQueue({
-          inbox_dir: settings.inbox_dir,
-          mode: settings.mode,
-          audio_format: settings.audio_format,
-          normalize_enabled: settings.normalize_enabled,
-          loudness: settings.loudness,
-          items: queued.map((i) => ({
-            id: i.id,
-            url: i.url,
-            preset_snapshot: i.presetSnapshot,
-          })),
+    // 2. Auto-classify background task (but DON'T start the engine)
+    const state = useQueueStore.getState();
+    const newItems = state.items.slice(-addedUrls.length);
+    const classifyItems = newItems.map((i) => ({ id: i.id, url: i.url }));
+
+    for (const ci of classifyItems) {
+      updateItemAuto(ci.id, { status: "running" });
+    }
+
+    api.classify(classifyItems).then((res) => {
+      for (const r of res.results) {
+        updateItemAuto(r.id, {
+          status: "done",
+          confidence: r.confidence,
+          notes: r.notes,
+          kind: r.kind,
         });
-        setJobId(res.job_id);
-        setRunning(true);
-        console.log("[Queue] Engine started! Job ID:", res.job_id);
-        toast.success("Extraction engine started");
-      } catch (e) {
-        console.error("[Queue] Engine start FAILED:", e);
-        toast.error("Failed to start engine automatically");
+        const store = useQueueStore.getState();
+        const item = store.items.find((i) => i.id === r.id);
+        if (item) {
+          const tags: Partial<DJTags> = {};
+          if (r.genre) tags.genre = r.genre;
+          if (r.energy) tags.energy = r.energy;
+          if (r.time) tags.time = r.time;
+          if (r.vibe) tags.vibe = r.vibe;
+          store.updateItemTags(r.id, tags);
+        }
       }
-    };
+    }).catch((err) => {
+      console.error("[Queue] Classification failed:", err);
+      for (const ci of classifyItems) {
+        updateItemAuto(ci.id, { status: "error" });
+      }
+    });
 
-    autoStart();
-
-  }, [detectedUrls, running, addItems, updateItemAuto, settings, setJobId, setRunning]);
-
+  }, [inputText, detectedUrls, addItems, updateItemAuto]);
 
   const handleStart = useCallback(async () => {
     const queued = items.filter((i) => i.status === "queued" || i.status === "error");
@@ -300,9 +272,9 @@ export default function QueuePage() {
       });
       setJobId(res.job_id);
       setRunning(true);
-      toast.success("Queue started");
+      toast.success("Queue processing started");
     } catch (e) {
-      toast.error("Failed to start queue");
+      toast.error("Failed to start queue processing");
     }
   }, [items, settings, setJobId, setRunning, updateItemStatus]);
 
@@ -310,7 +282,7 @@ export default function QueuePage() {
     if (jobId) {
       await api.stopQueue(jobId).catch(() => { });
       setRunning(false);
-      toast.info("Queue stopped");
+      toast.info("Engine stopped");
     }
   }, [jobId, setRunning]);
 
@@ -356,22 +328,55 @@ export default function QueuePage() {
                 onChange={(e) => setInputText(e.target.value)}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
-                placeholder="Paste YouTube URLs here..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAddItems();
+                  }
+                }}
+                placeholder="Paste YouTube track URLs here..."
                 rows={Math.max(3, Math.min(6, inputText.split('\n').length))}
                 className="w-full resize-none bg-transparent px-8 py-8 text-lg text-[var(--dc-text)] placeholder-[var(--dc-muted2)] focus:outline-none transition-all placeholder:text-xl font-medium"
               />
 
               <div className="px-6 py-4 border-t border-[var(--dc-border)] bg-[rgba(0,0,0,0.2)] flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {detectedUrls.length > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="w-5 h-5 text-[var(--dc-accent)] animate-spin" />
-                      <span className="text-sm font-semibold text-[var(--dc-accent-text)] tracking-wider uppercase">Auto-Starting Engine...</span>
-                    </div>
+                  {inputText.trim().length > 0 ? (
+                    detectedUrls.length > 0 ? (
+                      <div className="flex items-center gap-2 text-[var(--dc-success-text)] font-semibold text-sm">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span>Ready to add {detectedUrls.length} track{detectedUrls.length > 1 ? 's' : ''}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-[var(--dc-danger-text)] font-semibold text-sm">
+                        <AlertCircle className="w-5 h-5" />
+                        <span>Invalid YouTube track URL</span>
+                      </div>
+                    )
                   ) : (
                     <span className="text-xs font-medium text-[var(--dc-muted)] uppercase tracking-widest flex items-center gap-1.5"><Music className="w-4 h-4" /> Drop tracks to begin</span>
                   )}
                 </div>
+
+                <AnimatePresence>
+                  {inputText.trim().length > 0 && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      onClick={handleAddItems}
+                      disabled={detectedUrls.length === 0}
+                      className={clsx(
+                        "rounded-full px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all",
+                        detectedUrls.length > 0
+                          ? "bg-[var(--dc-accent)] hover:bg-[var(--dc-accent-light)] shadow-[0_4px_20px_var(--dc-accent-bg)]"
+                          : "bg-[var(--dc-chip)] text-[var(--dc-muted)] cursor-not-allowed shadow-none"
+                      )}
+                    >
+                      {detectedUrls.length > 0 ? "Add to Queue (Enter)" : "Invalid Link"}
+                    </motion.button>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </motion.div>
@@ -396,7 +401,7 @@ export default function QueuePage() {
                   onClick={handleStart}
                   className="rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 px-8 py-3 text-sm font-extrabold text-[#022c22] uppercase tracking-widest hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center gap-2"
                 >
-                  <Play className="w-4 h-4 fill-current" /> Resume Engine
+                  <Play className="w-4 h-4 fill-current" /> {jobId ? "Resume Engine" : "Start Engine"}
                 </motion.button>
               )}
               {running && (
