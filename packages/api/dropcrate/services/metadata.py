@@ -24,6 +24,7 @@ def _sync_fetch_info(url: str) -> dict:
         "--socket-timeout", "15",
         "--retries", "2",
         "--extractor-args", "youtube:player_client=ios,android,tv",
+        "--remote-components", "ejs:github",
         url,
     ]
 

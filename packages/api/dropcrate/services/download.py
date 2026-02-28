@@ -32,6 +32,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--socket-timeout", "30",
         "--retries", "3",
         "--extractor-args", "youtube:player_client=ios,android,tv",
+        "--remote-components", "ejs:github",
     ]
 
     # Add cookies if available
@@ -72,6 +73,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--socket-timeout", "30",
         "--retries", "3",
         "--extractor-args", "youtube:player_client=ios,android,tv",
+        "--remote-components", "ejs:github",
         "--verbose",
     ]
     if cookies_file:
