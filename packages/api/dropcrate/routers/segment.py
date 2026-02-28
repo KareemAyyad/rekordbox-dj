@@ -136,7 +136,6 @@ async def auto_segment(req: AutoSegmentRequest):
     async def _run():
         try:
             if stems.is_available():
-                # === LOCAL DEMUCS PATH ===
                 segment_job_manager.broadcast(job, {"type": "auto-start", "total": 4})
                 segment_job_manager.broadcast(job, {"type": "model-loading"})
                 segment_job_manager.broadcast(job, {"type": "model-ready"})
@@ -154,7 +153,7 @@ async def auto_segment(req: AutoSegmentRequest):
                         "id": str(uuid.uuid4())[:8],
                         "prompt": f"Isolated {stem_name}",
                         "label": stem_name.capitalize(),
-                        "target_url": f"/api/segment/stream/{req.session_id}/{stem_name}.wav",
+                        "target_url": f"/api/segment/stream/{req.session_id}/{Path(stem_path).name}",
                         "residual_url": "",
                         "duration_seconds": 0,
                     }
@@ -163,48 +162,11 @@ async def auto_segment(req: AutoSegmentRequest):
 
                 segment_job_manager.broadcast(job, {"type": "auto-done", "segments": segments})
             else:
-                # === CLOUD RUNPOD/SAM-AUDIO FALLBACK ===
-                total = len(categories or DEFAULT_DJ_PROMPTS)
-                segment_job_manager.broadcast(job, {"type": "auto-start", "total": total})
-
-                if not sam_audio_service.is_loaded:
-                    segment_job_manager.broadcast(job, {"type": "model-loading"})
-                    await sam_audio_service.load_model()
-                    segment_job_manager.broadcast(job, {"type": "model-ready"})
-
-                def progress_cb(label: str, index: int, total: int):
-                    segment_job_manager.broadcast(job, {
-                        "type": "segment-start", "label": label,
-                        "index": index, "total": total,
-                    })
-
-                def error_cb(prompt: str, error: str):
-                    segment_job_manager.broadcast(job, {
-                        "type": "segment-error", "prompt": prompt, "error": error,
-                    })
-
-                results = await sam_audio_service.auto_segment(
-                    session_dir=session_dir, audio_path=audio_path,
-                    categories=categories,
-                    guidance_scale=req.guidance_scale,
-                    num_steps=req.num_steps,
-                    reranking_candidates=req.reranking_candidates,
-                    progress_callback=progress_cb, error_callback=error_cb,
-                )
-
-                segments = []
-                for r in results:
-                    seg = {
-                        "id": r["id"], "prompt": r["prompt"], "label": r["label"],
-                        "target_url": f"/api/segment/stream/{req.session_id}/{r['target_filename']}",
-                        "residual_url": f"/api/segment/stream/{req.session_id}/{r['residual_filename']}",
-                        "duration_seconds": r["duration_seconds"],
-                    }
-                    segments.append(seg)
-                    segment_job_manager.broadcast(job, {"type": "segment-done", "segment": seg})
-
-                segment_job_manager.broadcast(job, {"type": "auto-done", "segments": segments})
+                segment_job_manager.broadcast(job, {"type": "auto-error", "error": "No stem separation backend available (PyTorch or Replicate API Token missing)."})
         except Exception as e:
+            import traceback
+            err_trace = traceback.format_exc()
+            logger.error(f"Auto-segment ERROR: {e}\n{err_trace}")
             segment_job_manager.broadcast(job, {"type": "auto-error", "error": str(e)})
 
     asyncio.create_task(_run())
