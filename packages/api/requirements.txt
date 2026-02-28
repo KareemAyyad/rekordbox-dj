@@ -19,9 +19,6 @@ numpy<2.0.0
 librosa>=0.10.0
 scipy>=1.10.0
 
-# Replicate API — Hosted GPU Demucs stem separation (~$0.02/track)
-replicate>=1.0.0
-
 brotli==1.1.0
 websockets==12.0
 
