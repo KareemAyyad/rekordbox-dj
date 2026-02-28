@@ -305,7 +305,7 @@ export default function SegmentPage() {
                 <p className="mt-3 text-sm text-[var(--dc-muted)]">Uploading...</p>
               </div>
             ) : (
-              <UploadZone onUpload={handleUploadAndSegment} />
+              <UploadZone onUpload={handleUpload} />
             )
           ) : (
             <div className="space-y-4">
@@ -390,9 +390,8 @@ export default function SegmentPage() {
 
               {/* Advanced params */}
               <AdvancedParams
-                guidanceScale={guidanceScale}
-                numSteps={numSteps}
-                rerankingCandidates={rerankingCandidates}
+                shifts={shifts}
+                overlap={overlap}
                 onChange={handleParamChange}
               />
             </div>
