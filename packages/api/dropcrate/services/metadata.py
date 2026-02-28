@@ -28,6 +28,11 @@ def _sync_fetch_info(url: str) -> dict:
         "--remote-components", "ejs:github",
     ]
 
+    import subprocess as sp
+    logger.error(f"[diagnostics] node -v: {sp.getoutput('node -v')}")
+    logger.error(f"[diagnostics] which node: {sp.getoutput('which node')}")
+    logger.error(f"[diagnostics] env PATH: {sp.getoutput('echo $PATH')}")
+
     from dropcrate import config
     cookies_file = config.get_cookies_file()
     if cookies_file:
