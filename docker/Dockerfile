@@ -33,6 +33,9 @@ RUN git clone https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/b
     npm ci && \
     npx tsc
 
+# Install the bgutil yt-dlp plugin from the same repo (NOT the stale PyPI package)
+RUN pip install --no-cache-dir /opt/bgutil/plugin/
+
 WORKDIR /app
 
 # Install Python dependencies from requirements.txt
