@@ -23,7 +23,7 @@ def _sync_fetch_info(url: str) -> dict:
         "--no-playlist",
         "--socket-timeout", "15",
         "--retries", "2",
-        "--force-ipv6",
+        "--force-ipv4",
         "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
     ]
@@ -56,8 +56,8 @@ def _sync_fetch_info(url: str) -> dict:
         logger.warning(f"[yt-dlp metadata] Failed (exit {result.returncode}): ... {stderr[-1000:]}")
 
         # If the first attempt failed, try with verbose to see plugin status
-        logger.info("[yt-dlp metadata] Retrying with verbose output for diagnostics...")
-        cmd_v = cmd[:-1] + ["--verbose", url]  # URL must be last
+        logger.info("[yt-dlp metadata] Retrying with verbose output and Tor proxy for diagnostics...")
+        cmd_v = cmd[:-1] + ["--proxy", "socks5h://127.0.0.1:9050", "--verbose", url]  # URL must be last
         result_v = subprocess.run(
             cmd_v,
             capture_output=True,

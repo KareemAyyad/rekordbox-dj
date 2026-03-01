@@ -31,7 +31,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "3",
-        "--force-ipv6",
+        "--force-ipv4",
         "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
     ]
@@ -65,16 +65,17 @@ def _sync_download(url: str, work_dir: Path) -> Path:
     logger.warning(f"[yt-dlp download] Failed (exit {result.returncode}): {stderr[-1500:]}")
 
     # Retry with relaxed format
-    logger.info("[yt-dlp download] Retrying with progressive formatting override...")
+    logger.info("[yt-dlp download] Retrying with progressive formatting override and Tor routing...")
     cmd_retry = [
         "yt-dlp",
         # Strictly ignore m3u8 and dashy chunk formats. Fallbacks directly to format 18 MP4 stream if necessary.
         "-f", "bestaudio[protocol^=http]/18/best",
         "--extract-audio", "--audio-format", "m4a",
         "-o", str(outtmpl),
-        "--socket-timeout", "30",
-        "--retries", "3",
-        "--force-ipv6",
+        "--socket-timeout", "60",
+        "--retries", "5",
+        "--force-ipv4",
+        "--proxy", "socks5h://127.0.0.1:9050",
         "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
         "--verbose",
