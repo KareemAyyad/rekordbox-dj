@@ -97,7 +97,43 @@ def _sync_download(url: str, work_dir: Path) -> Path:
             return downloaded
 
     stderr2 = result2.stderr.strip() if result2.stderr else "no stderr"
-    raise RuntimeError(f"yt-dlp download failed after retry: {stderr2[-1500:]}")
+    logger.warning(f"yt-dlp download failed after retry: {stderr2[-1500:]}")
+
+    # Fallback 3: Indestructible progressive stream
+    # Bypass chunked HLS/DASH (which causes 'empty fragments' on datacenter)
+    # by forcing the legacy format 18 (progressive MP4 stream) and extracting the audio locally
+    logger.info("[yt-dlp download] Attempt 3: Forcing progressive (format 18) fallback...")
+    cmd_fallback3 = [
+        "yt-dlp",
+        "-f", "18/best[ext=mp4]/best",
+        "--extract-audio", "--audio-format", "m4a",
+        "-o", str(outtmpl),
+        "--socket-timeout", "60",
+        "--retries", "5",
+        "--force-ipv4",
+        "--extractor-args", "youtube:player_client=mweb,default",
+        "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
+        "--remote-components", "ejs:github",
+    ]
+    if cookies_file:
+        cmd_fallback3.extend(["--cookies", cookies_file])
+    cmd_fallback3.append(url)
+
+    result3 = subprocess.run(
+        cmd_fallback3,
+        capture_output=True,
+        text=True,
+        timeout=1800,
+    )
+
+    if result3.returncode == 0:
+        downloaded = _find_most_recent(work_dir)
+        if downloaded:
+            logger.info(f"[yt-dlp download] Progressive fallback success: {downloaded.name}")
+            return downloaded
+
+    stderr3 = result3.stderr.strip() if result3.stderr else "no stderr"
+    raise RuntimeError(f"yt-dlp download failed on final progressive fallback: {stderr3[-1500:]}")
 
 
 def _find_most_recent(directory: Path) -> Path | None:
