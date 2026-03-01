@@ -32,7 +32,7 @@ ALLOWED_EXTENSIONS = {".mp3", ".m4a", ".wav", ".aiff", ".flac", ".ogg", ".opus",
 
 
 @router.post("/api/queue/upload")
-async def upload_audio_for_item(file: UploadFile, item_id: str, job_id: str, background_tasks: BackgroundTasks):
+async def upload_audio_for_item(file: UploadFile, item_id: str, job_id: str):
     """Accept a user-uploaded audio file and resume the pipeline from fingerprint."""
     ctx = _pending_uploads.pop(item_id, None)
     if not ctx:
@@ -52,10 +52,14 @@ async def upload_audio_for_item(file: UploadFile, item_id: str, job_id: str, bac
     uploaded_path.write_bytes(content)
     logger.info(f"[upload] Saved {len(content)} bytes as {uploaded_path}")
 
-    # Resume the pipeline in the background
-    background_tasks.add_task(_resume_pipeline, ctx, uploaded_path)
-
-    return {"ok": True}
+    # Resume the pipeline inline (not in background) so errors are visible
+    try:
+        await _resume_pipeline(ctx, uploaded_path)
+        return {"ok": True}
+    except Exception as e:
+        import traceback
+        logger.error(f"[upload] Pipeline crash: {e}\n{traceback.format_exc()}")
+        return {"ok": False, "error": f"Pipeline crash: {e}"}
 
 
 async def _resume_pipeline(ctx: dict, uploaded_path: Path) -> None:
