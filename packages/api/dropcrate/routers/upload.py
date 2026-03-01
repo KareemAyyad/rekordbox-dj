@@ -84,14 +84,18 @@ async def _resume_pipeline(ctx: dict, uploaded_path: Path) -> None:
             })
 
     # Notify that we're resuming
+    logger.info(f"[upload] _resume_pipeline started for item={item_id}, job={ctx['job_id']}")
     if job:
         job_manager.broadcast(job, {
             "type": "item-start", "job_id": ctx["job_id"], "item_id": item_id, "url": url
         })
+    else:
+        logger.error(f"[upload] Job {ctx['job_id']} not found in job_manager!")
 
     try:
         downloaded_path = uploaded_path
         downloaded_ext = downloaded_path.suffix.lower()
+        logger.info(f"[upload] Processing uploaded file: {uploaded_path} (ext={downloaded_ext})")
 
         # Download thumbnail
         thumb_url = tagger.pick_best_thumbnail_url(info)
