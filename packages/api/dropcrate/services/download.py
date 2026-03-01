@@ -111,7 +111,8 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--socket-timeout", "60",
         "--retries", "5",
         "--force-ipv4",
-        "--extractor-args", "youtube:player_client=android",
+        "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
+        "--remote-components", "ejs:github",
     ]
     if cookies_file:
         cmd_fallback3.extend(["--cookies", cookies_file])
