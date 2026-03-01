@@ -154,7 +154,40 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
     try:
         # Stage 1: Metadata
         progress("metadata")
-        info = await fetch_video_info(url)
+        try:
+            info = await fetch_video_info(url)
+        except Exception as meta_err:
+            logger.warning(f"[pipeline] Metadata extraction failed for {url}: {meta_err}")
+            # Extract video ID from URL for minimal context
+            vid_match = re.search(r'(?:v=|/)([a-zA-Z0-9_-]{11})', url)
+            source_id = vid_match.group(1) if vid_match else hashlib.sha1(url.encode()).hexdigest()[:10]
+            work_dir = inbox_dir / f".dropcrate_tmp_{source_id}"
+            work_dir.mkdir(parents=True, exist_ok=True)
+            _pending_uploads[item.id] = {
+                "job_id": job.id,
+                "item_id": item.id,
+                "url": url,
+                "info": {"title": "Unknown Title", "id": source_id},
+                "source_url": url,
+                "source_id": source_id,
+                "normalized": {"artist": "Unknown", "title": "Unknown", "version": ""},
+                "classification": {"genre": dj_defaults.genre or "Other", "energy": dj_defaults.energy or "", "time": dj_defaults.time or "", "vibe": dj_defaults.vibe or ""},
+                "title_had_separator": False,
+                "dj_defaults": {"genre": dj_defaults.genre, "energy": dj_defaults.energy, "time": dj_defaults.time, "vibe": dj_defaults.vibe},
+                "work_dir": str(work_dir),
+                "inbox_dir": str(inbox_dir),
+                "req": req,
+            }
+            job_manager.broadcast(job, {
+                "type": "item-upload-needed",
+                "job_id": job.id,
+                "item_id": item.id,
+                "url": url,
+                "title": f"YouTube video ({source_id})",
+                "error": str(meta_err),
+            })
+            return
+
         source_url = info.get("webpage_url") or url
         source_id = info.get("id") or hashlib.sha1(source_url.encode()).hexdigest()[:10]
 
