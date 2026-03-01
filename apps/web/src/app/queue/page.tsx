@@ -5,7 +5,7 @@ import clsx from "clsx";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Variants } from "framer-motion";
-import { Sparkles, Trash2, ShieldAlert, MonitorUp, Zap, RadioTower, CheckCircle2, Loader2, AlertCircle, Play, Music, Clock, Disc3 } from "lucide-react";
+import { Sparkles, Trash2, ShieldAlert, MonitorUp, Zap, RadioTower, CheckCircle2, Loader2, AlertCircle, Play, Music, Clock, Disc3, Upload } from "lucide-react";
 import { useQueueStore } from "@/stores/queue-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSSE } from "@/hooks/use-sse";
@@ -15,18 +15,20 @@ import { STAGE_LABELS } from "@/lib/constants";
 import type { QueueItem, DJTags } from "@/lib/types";
 
 function StatusPill({ status }: { status: QueueItem["status"] }) {
-  const styles = {
+  const styles: Record<string, string> = {
     queued: "bg-[var(--dc-chip)] text-[var(--dc-muted)] border-[var(--dc-border)]",
     running: "bg-[var(--dc-accent-bg)] text-[var(--dc-accent-text)] border-[color:var(--dc-accent-border)] shadow-[0_0_15px_var(--dc-accent-ring)]",
     done: "bg-[var(--dc-success-bg)] text-[var(--dc-success-text)] border-[color:var(--dc-success-border)] shadow-[0_0_10px_var(--dc-success-bg)]",
     error: "bg-[var(--dc-danger-bg)] text-[var(--dc-danger-text)] border-[color:var(--dc-danger-border)]",
+    "upload-needed": "bg-[var(--dc-warning-bg)] text-[var(--dc-warning-text)] border-[color:var(--dc-warning-border)] shadow-[0_0_10px_var(--dc-warning-bg)]",
   };
-  const labels = { queued: "Queued", running: "Processing", done: "Ready", error: "Error" };
-  const icons = {
+  const labels: Record<string, string> = { queued: "Queued", running: "Processing", done: "Ready", error: "Error", "upload-needed": "Upload Needed" };
+  const icons: Record<string, React.ReactNode> = {
     queued: <Clock className="w-3 h-3" />,
     running: <Loader2 className="w-3 h-3 animate-spin" />,
     done: <CheckCircle2 className="w-3 h-3" />,
-    error: <AlertCircle className="w-3 h-3" />
+    error: <AlertCircle className="w-3 h-3" />,
+    "upload-needed": <Upload className="w-3 h-3" />,
   };
 
   return (
@@ -55,13 +57,51 @@ const itemVariants: Variants = {
   }
 };
 
-function QueueItemRow({ item, onRemove, onRetry }: {
+const ACCEPTED_AUDIO = ".mp3,.m4a,.wav,.aiff,.flac,.ogg,.opus,.wma,.webm";
+
+function QueueItemRow({ item, onRemove, onRetry, jobId }: {
   item: QueueItem;
   onRemove: () => void;
   onRetry: () => void;
+  jobId: string | null;
 }) {
   const stage = item.auto?.stage;
   const isRunning = item.status === "running";
+  const isUploadNeeded = item.status === "upload-needed";
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const updateItemStatus = useQueueStore((s) => s.updateItemStatus);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    if (!jobId) return;
+    setUploading(true);
+    try {
+      const res = await api.uploadQueueAudio(file, item.id, jobId);
+      if (res.ok) {
+        updateItemStatus(item.id, "running");
+        toast.success(`Uploaded ${file.name} — resuming processing`);
+      } else {
+        toast.error(res.error || "Upload failed");
+      }
+    } catch (err) {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }, [item.id, jobId, updateItemStatus]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileUpload(file);
+  }, [handleFileUpload]);
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
+  }, [handleFileUpload]);
 
   return (
     <motion.li
@@ -105,6 +145,42 @@ function QueueItemRow({ item, onRemove, onRetry }: {
             <p className="mt-2 text-xs text-[var(--dc-danger-text)] flex items-center gap-1.5 font-medium">
               <AlertCircle className="w-4 h-4" /> {item.message}
             </p>
+          )}
+
+          {/* Upload Dropzone — shown when server download is blocked */}
+          {isUploadNeeded && (
+            <div
+              className={clsx(
+                "mt-3 rounded-xl border-2 border-dashed p-4 transition-all duration-200 cursor-pointer",
+                dragOver
+                  ? "border-[var(--dc-accent)] bg-[var(--dc-accent-bg)] scale-[1.01]"
+                  : "border-[var(--dc-border)] bg-[var(--dc-chip)] hover:border-[var(--dc-accent)] hover:bg-[var(--dc-accent-bg)]"
+              )}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_AUDIO}
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              {uploading ? (
+                <div className="flex items-center justify-center gap-2 text-[var(--dc-accent-text)]">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-xs font-bold">Uploading...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 text-center">
+                  <Upload className="w-5 h-5 text-[var(--dc-warning-text)]" />
+                  <p className="text-xs font-semibold text-[var(--dc-text)]">Drop your audio file here</p>
+                  <p className="text-[10px] text-[var(--dc-muted)]">YouTube blocked the server. Download the track yourself and upload it here.</p>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Tag badges - V2 Style */}
@@ -472,6 +548,7 @@ export default function QueuePage() {
                 <QueueItemRow
                   key={item.id}
                   item={item}
+                  jobId={jobId}
                   onRemove={() => removeItem(item.id)}
                   onRetry={() => handleRetry(item.id)}
                 />

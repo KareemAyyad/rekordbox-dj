@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT = 3
 
+# Stores pipeline context for items awaiting user file upload
+# Key: item_id, Value: dict with all metadata needed to resume from fingerprint stage
+_pending_uploads: dict[str, dict] = {}
+
 
 async def _maybe_generate_rekordbox_xml(job: Job, inbox_dir: Path) -> None:
     """Generate rekordbox XML after a batch if the setting is enabled.
@@ -184,7 +188,36 @@ async def _process_one(job: Job, req: QueueStartRequest, item, inbox_dir: Path) 
 
             # Stage 3: Download
             progress("download")
-            downloaded_path = await download.download_audio(url, work_dir)
+            try:
+                downloaded_path = await download.download_audio(url, work_dir)
+            except Exception as dl_err:
+                logger.warning(f"[pipeline] Download failed for {url}: {dl_err}")
+                # Store pipeline context so upload endpoint can resume
+                _pending_uploads[item.id] = {
+                    "job_id": job.id,
+                    "item_id": item.id,
+                    "url": url,
+                    "info": info,
+                    "source_url": source_url,
+                    "source_id": source_id,
+                    "normalized": {"artist": normalized.artist, "title": normalized.title, "version": normalized.version},
+                    "classification": {"genre": effective_genre, "energy": effective_energy, "time": effective_time, "vibe": effective_vibe},
+                    "title_had_separator": title_had_separator,
+                    "dj_defaults": {"genre": dj_defaults.genre, "energy": dj_defaults.energy, "time": dj_defaults.time, "vibe": dj_defaults.vibe},
+                    "work_dir": str(work_dir),
+                    "inbox_dir": str(inbox_dir),
+                    "req": req,
+                }
+                job_manager.broadcast(job, {
+                    "type": "item-upload-needed",
+                    "job_id": job.id,
+                    "item_id": item.id,
+                    "url": url,
+                    "title": info.get("title", "Unknown"),
+                    "error": str(dl_err),
+                })
+                return  # Don't clean up work_dir — upload endpoint needs it
+
             downloaded_ext = downloaded_path.suffix.lower()
 
             # Download thumbnail

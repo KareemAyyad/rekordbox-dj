@@ -35,6 +35,9 @@ export function useSSE(jobId: string | null) {
           case "item-error":
             updateItemStatus(event.item_id, "error", event.error);
             break;
+          case "item-upload-needed":
+            updateItemStatus(event.item_id, "upload-needed", event.title);
+            break;
           case "queue-done":
             setRunning(false);
             break;

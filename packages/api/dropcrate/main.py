@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from dropcrate import config, database
-from dropcrate.routers import classify, events, health, library, queue, segment, settings
+from dropcrate.routers import classify, events, health, library, queue, segment, settings, upload
 from dropcrate.services.job_manager import job_manager  # noqa: F401
 
 
@@ -41,6 +41,7 @@ app.include_router(queue.router)
 app.include_router(events.router)
 app.include_router(library.router)
 app.include_router(segment.router)
+app.include_router(upload.router)
 
 # Serve Next.js static build in production
 if config.STATIC_DIR.exists():

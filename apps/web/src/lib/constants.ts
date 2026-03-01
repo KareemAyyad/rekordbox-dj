@@ -42,6 +42,7 @@ export const STAGE_LABELS: Record<string, string> = {
   classify: "Classifying",
   download: "Downloading",
   fingerprint: "Fingerprinting",
+  analysis: "Analyzing key & BPM",
   normalize: "Normalizing",
   transcode: "Transcoding",
   tag: "Tagging",

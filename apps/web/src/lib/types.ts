@@ -1,12 +1,13 @@
 export type AppTab = "queue" | "library" | "settings" | "segment";
 
-export type QueueItemStatus = "queued" | "running" | "done" | "error";
+export type QueueItemStatus = "queued" | "running" | "done" | "error" | "upload-needed";
 
 export type DownloadStage =
   | "metadata"
   | "classify"
   | "download"
   | "fingerprint"
+  | "analysis"
   | "normalize"
   | "transcode"
   | "tag"
@@ -83,6 +84,7 @@ export type SSEEvent =
   | { type: "item-progress"; job_id: string; item_id: string; url: string; stage: DownloadStage }
   | { type: "item-done"; job_id: string; item_id: string; url: string }
   | { type: "item-error"; job_id: string; item_id: string; url: string; error: string }
+  | { type: "item-upload-needed"; job_id: string; item_id: string; url: string; title: string; error: string }
   | { type: "queue-done"; job_id: string };
 
 // --- Segment (SAM-Audio) ---

@@ -67,6 +67,16 @@ export const api = {
       body: JSON.stringify({ job_id: jobId }),
     }),
 
+  uploadQueueAudio: async (file: File, itemId: string, jobId: string): Promise<{ ok: boolean; error?: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE}/api/queue/upload?item_id=${encodeURIComponent(itemId)}&job_id=${encodeURIComponent(jobId)}`, {
+      method: "POST",
+      body: form,
+    });
+    return res.json();
+  },
+
   getLibrary: (search = "", sort = "date") =>
     apiFetch<LibraryItem[]>(`/api/library?search=${encodeURIComponent(search)}&sort=${sort}`),
 
