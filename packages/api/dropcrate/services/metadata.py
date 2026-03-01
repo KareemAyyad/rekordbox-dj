@@ -57,7 +57,6 @@ def _sync_fetch_info(url: str) -> dict:
 
         # If the first attempt failed, try with verbose to see plugin status
         logger.info("[yt-dlp metadata] Retrying with verbose output and Tor proxy for diagnostics...")
-        cmd_v = cmd[:-1] + ["--proxy", "socks5h://127.0.0.1:9050", "--verbose", url]  # URL must be last
         result_v = subprocess.run(
             cmd_v,
             capture_output=True,
