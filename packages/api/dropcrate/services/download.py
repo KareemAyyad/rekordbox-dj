@@ -99,10 +99,11 @@ def _sync_download(url: str, work_dir: Path) -> Path:
     stderr2 = result2.stderr.strip() if result2.stderr else "no stderr"
     logger.warning(f"yt-dlp download failed after retry: {stderr2[-1500:]}")
 
-    # Fallback 3: Indestructible progressive stream
-    # Bypass chunked HLS/DASH (which causes 'empty fragments' on datacenter)
-    # by forcing the legacy format 18 (progressive MP4 stream) and extracting the audio locally
-    logger.info("[yt-dlp download] Attempt 3: Forcing progressive (format 18) fallback...")
+    # Fallback 3: Indestructible anonymous progressive stream
+    # Bypass chunked HLS/DASH and fingerprint/PO token mismatch restrictions entirely
+    # by anonymously requesting the legacy format 18 (progressive MP4) via mweb 
+    # without attaching any browser cookies.
+    logger.info("[yt-dlp download] Attempt 3: Forcing anonymous progressive (format 18) fallback...")
     cmd_fallback3 = [
         "yt-dlp",
         "-f", "18/best[ext=mp4]/best",
@@ -111,11 +112,10 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--socket-timeout", "60",
         "--retries", "5",
         "--force-ipv4",
-        "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
+        "--extractor-args", "youtube:player_client=mweb",
         "--remote-components", "ejs:github",
     ]
-    if cookies_file:
-        cmd_fallback3.extend(["--cookies", cookies_file])
+    # Deliberately DO NOT extend cookies here. Anonymous mweb format 18 avoids PO Tokens.
     cmd_fallback3.append(url)
 
     result3 = subprocess.run(
