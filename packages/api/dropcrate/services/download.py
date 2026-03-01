@@ -25,7 +25,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
     # Build base command
     cmd = [
         "yt-dlp",
-        "--format", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+        "--format", "bestaudio[protocol^=http][ext=m4a]/bestaudio[protocol^=http]/18/best",
         "--format-sort", "abr,acodec:aac:opus:mp3",
         "--output", outtmpl,
         "--no-playlist",
@@ -65,13 +65,13 @@ def _sync_download(url: str, work_dir: Path) -> Path:
     logger.warning(f"[yt-dlp download] Failed (exit {result.returncode}): {stderr[-1500:]}")
 
     # Retry with relaxed format
-    logger.info("[yt-dlp download] Retrying with relaxed format...")
+    logger.info("[yt-dlp download] Retrying with progressive formatting override...")
     cmd_retry = [
         "yt-dlp",
-        # We want best audio, ignoring video, preferring m4a/mp3 if available
-        "-f", "bestaudio[ext=m4a]/bestaudio/best",
-        # Output path
-        "-o", str(outtmpl), # Changed from output_path to outtmpl
+        # Strictly ignore m3u8 and dashy chunk formats. Fallbacks directly to format 18 MP4 stream if necessary.
+        "-f", "bestaudio[protocol^=http]/18/best",
+        "--extract-audio", "--audio-format", "m4a",
+        "-o", str(outtmpl),
         "--socket-timeout", "30",
         "--retries", "3",
         "--force-ipv4",
@@ -98,41 +98,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
 
     stderr2 = result2.stderr.strip() if result2.stderr else "no stderr"
     logger.warning(f"yt-dlp download failed after retry: {stderr2[-1500:]}")
-
-    # Fallback 3: Indestructible anonymous progressive stream
-    # Bypass chunked HLS/DASH and fingerprint/PO token mismatch restrictions entirely
-    # by anonymously requesting the legacy format 18 (progressive MP4) via mweb 
-    # without attaching any browser cookies.
-    logger.info("[yt-dlp download] Attempt 3: Forcing anonymous progressive (format 18) fallback...")
-    cmd_fallback3 = [
-        "yt-dlp",
-        "-f", "18/best[ext=mp4]/best",
-        "--extract-audio", "--audio-format", "m4a",
-        "-o", str(outtmpl),
-        "--socket-timeout", "60",
-        "--retries", "5",
-        "--force-ipv4",
-        "--extractor-args", "youtube:player_client=mweb",
-        "--remote-components", "ejs:github",
-    ]
-    # Deliberately DO NOT extend cookies here. Anonymous mweb format 18 avoids PO Tokens.
-    cmd_fallback3.append(url)
-
-    result3 = subprocess.run(
-        cmd_fallback3,
-        capture_output=True,
-        text=True,
-        timeout=1800,
-    )
-
-    if result3.returncode == 0:
-        downloaded = _find_most_recent(work_dir)
-        if downloaded:
-            logger.info(f"[yt-dlp download] Progressive fallback success: {downloaded.name}")
-            return downloaded
-
-    stderr3 = result3.stderr.strip() if result3.stderr else "no stderr"
-    raise RuntimeError(f"yt-dlp download failed on final progressive fallback: {stderr3[-1500:]}")
+    raise RuntimeError(f"yt-dlp download completely failed: {stderr2[-1500:]}")
 
 
 def _find_most_recent(directory: Path) -> Path | None:
