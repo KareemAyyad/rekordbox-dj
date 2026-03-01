@@ -3,7 +3,7 @@
 
 # Start bgutil PO token server in background (port 4416)
 if [ -d /opt/bgutil/server/build ]; then
-    echo "[start.sh] Starting bgutil PO token server v1.2.2 on port 4416..."
+    echo "[start.sh] Starting bgutil PO token server (latest) on port 4416..."
     (cd /opt/bgutil/server && node build/main.js) &
     BGUTIL_PID=$!
     sleep 3
@@ -22,7 +22,6 @@ if [ -d /opt/bgutil/server/build ]; then
 else
     echo "[start.sh] ❌ bgutil server not found — skipping PO token provider."
 fi
-# Start Tor daemon
 
 # Start FastAPI (exec replaces shell — becomes PID 1 for proper signal handling)
 echo "[start.sh] Starting FastAPI on port ${PORT:-10000}..."

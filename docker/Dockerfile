@@ -26,8 +26,8 @@ RUN apt-get update && \
     ln -s /root/.deno/bin/deno /usr/local/bin/deno && \
     rm -rf /var/lib/apt/lists/*
 
-# Build bgutil PO token server v1.2.2 (auto-generates YouTube PO tokens for yt-dlp)
-RUN git clone --single-branch --branch 1.2.2 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil && \
+# Build bgutil PO token server (latest main — includes ytAtP cipher fix)
+RUN git clone --single-branch --branch main https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil && \
     cd /opt/bgutil/server && \
     npm ci && \
     npx tsc
