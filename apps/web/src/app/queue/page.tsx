@@ -76,15 +76,18 @@ function QueueItemRow({ item, onRemove, onRetry, jobId }: {
   const handleFileUpload = useCallback(async (file: File) => {
     if (!jobId) return;
     setUploading(true);
+    updateItemStatus(item.id, "running");
     try {
       const res = await api.uploadQueueAudio(file, item.id, jobId);
       if (res.ok) {
-        updateItemStatus(item.id, "running");
-        toast.success(`Uploaded ${file.name} — resuming processing`);
+        updateItemStatus(item.id, "done");
+        toast.success(`${file.name} processed successfully`);
       } else {
+        updateItemStatus(item.id, "upload-needed");
         toast.error(res.error || "Upload failed");
       }
     } catch (err) {
+      updateItemStatus(item.id, "upload-needed");
       toast.error("Upload failed");
     } finally {
       setUploading(false);
