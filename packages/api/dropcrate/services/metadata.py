@@ -56,7 +56,8 @@ def _sync_fetch_info(url: str) -> dict:
         logger.warning(f"[yt-dlp metadata] Failed (exit {result.returncode}): ... {stderr[-1000:]}")
 
         # If the first attempt failed, try with verbose to see plugin status
-        logger.info("[yt-dlp metadata] Retrying with verbose output and Tor proxy for diagnostics...")
+        logger.info("[yt-dlp metadata] Retrying with verbose output for diagnostics...")
+        cmd_v = cmd[:-1] + ["--verbose", url]  # URL must be last
         result_v = subprocess.run(
             cmd_v,
             capture_output=True,
