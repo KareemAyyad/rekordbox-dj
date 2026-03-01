@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, UploadFile, BackgroundTasks
 
 from dropcrate.services import fingerprint, harmonic, normalize, tagger, transcode
 from dropcrate.services.job_manager import Job, job_manager
@@ -32,7 +32,7 @@ ALLOWED_EXTENSIONS = {".mp3", ".m4a", ".wav", ".aiff", ".flac", ".ogg", ".opus",
 
 
 @router.post("/api/queue/upload")
-async def upload_audio_for_item(file: UploadFile, item_id: str, job_id: str):
+async def upload_audio_for_item(file: UploadFile, item_id: str, job_id: str, background_tasks: BackgroundTasks):
     """Accept a user-uploaded audio file and resume the pipeline from fingerprint."""
     ctx = _pending_uploads.pop(item_id, None)
     if not ctx:
@@ -53,7 +53,7 @@ async def upload_audio_for_item(file: UploadFile, item_id: str, job_id: str):
     logger.info(f"[upload] Saved {len(content)} bytes as {uploaded_path}")
 
     # Resume the pipeline in the background
-    asyncio.create_task(_resume_pipeline(ctx, uploaded_path))
+    background_tasks.add_task(_resume_pipeline, ctx, uploaded_path)
 
     return {"ok": True}
 
