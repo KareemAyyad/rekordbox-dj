@@ -23,7 +23,7 @@ def _sync_fetch_info(url: str) -> dict:
         "--no-playlist",
         "--socket-timeout", "15",
         "--retries", "2",
-        "--force-ipv4",
+        "--force-ipv6",
         "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
     ]

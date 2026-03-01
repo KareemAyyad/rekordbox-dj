@@ -31,7 +31,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "3",
-        "--force-ipv4",
+        "--force-ipv6",
         "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
     ]
@@ -74,7 +74,7 @@ def _sync_download(url: str, work_dir: Path) -> Path:
         "-o", str(outtmpl),
         "--socket-timeout", "30",
         "--retries", "3",
-        "--force-ipv4",
+        "--force-ipv6",
         "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
         "--remote-components", "ejs:github",
         "--verbose",
