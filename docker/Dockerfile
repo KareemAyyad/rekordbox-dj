@@ -26,9 +26,10 @@ RUN apt-get update && \
     ln -s /root/.deno/bin/deno /usr/local/bin/deno && \
     rm -rf /var/lib/apt/lists/*
 
-# Build bgutil PO token server (latest main — includes ytAtP cipher fix)
-RUN git clone --single-branch --branch main https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil && \
-    cd /opt/bgutil/server && \
+# Build bgutil PO token server (pinned to ytAtP cipher fix commit)
+RUN git clone https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil && \
+    cd /opt/bgutil && git checkout 96120947 && \
+    cd server && \
     npm ci && \
     npx tsc
 
