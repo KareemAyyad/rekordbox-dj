@@ -23,9 +23,6 @@ else
     echo "[start.sh] ❌ bgutil server not found — skipping PO token provider."
 fi
 # Start Tor daemon
-echo "[start.sh] Starting Tor network proxy to bypass YouTube ASN datablocks..."
-tor --quiet &
-sleep 2
 
 # Start FastAPI (exec replaces shell — becomes PID 1 for proper signal handling)
 echo "[start.sh] Starting FastAPI on port ${PORT:-10000}..."
