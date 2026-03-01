@@ -60,6 +60,28 @@ async def upload_audio_for_item(file: UploadFile, item_id: str, job_id: str):
 
 async def _resume_pipeline(ctx: dict, uploaded_path: Path) -> None:
     """Resume the pipeline from fingerprint stage using stored context + uploaded file."""
+    try:
+        await _resume_pipeline_inner(ctx, uploaded_path)
+    except Exception as e:
+        import traceback
+        logger.error(f"[upload] TOP-LEVEL CRASH in _resume_pipeline: {e}\n{traceback.format_exc()}")
+        # Try to broadcast the error to the SSE stream
+        try:
+            job = job_manager.get_job(ctx.get("job_id", ""))
+            if job:
+                job_manager.broadcast(job, {
+                    "type": "item-error",
+                    "job_id": ctx.get("job_id", ""),
+                    "item_id": ctx.get("item_id", ""),
+                    "url": ctx.get("url", ""),
+                    "error": f"Upload pipeline crash: {e}",
+                })
+        except Exception:
+            pass
+
+
+async def _resume_pipeline_inner(ctx: dict, uploaded_path: Path) -> None:
+    """Inner implementation of the resumed pipeline."""
     job = job_manager.get_job(ctx["job_id"])
     item_id = ctx["item_id"]
     url = ctx["url"]
